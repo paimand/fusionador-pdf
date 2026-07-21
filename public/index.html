@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fusionador de PDFs</title>
+  <!-- SortableJS para arrastrar y reordenar -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <!-- PDF.js para previsualización -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <!-- Hoja de estilos -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>📄 Fusionador de PDF</h1>
+    <p>Selecciona varios archivos PDF, ordénalos arrastrando y haz clic en «Unir»</p>
+
+    <!-- Zona de selección de archivos -->
+    <div class="upload-area" id="dropZone">
+      <p>Arrastra aquí tus PDF o haz clic para seleccionarlos</p>
+      <input type="file" id="fileInput" accept=".pdf" multiple>
+    </div>
+
+    <!-- Lista de archivos con previsualización -->
+    <div id="listContainer">
+      <h2>Archivos seleccionados (<span id="fileCount">0</span>)</h2>
+      <ul id="fileList" class="file-list"></ul>
+    </div>
+
+    <!-- Botones de acción -->
+    <div class="actions">
+      <button id="clearBtn" class="btn btn-secondary">Vaciar lista</button>
+      <button id="mergeBtn" class="btn btn-primary">🔗 Unir PDFs</button>
+    </div>
+
+    <!-- Indicador de carga -->
+    <div id="loading" style="display:none;">Procesando... Por favor espera.</div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

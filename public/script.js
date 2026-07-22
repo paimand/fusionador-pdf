@@ -1,15 +1,8 @@
 // ============================================================
-// CONFIGURACIÓN DE PDF.JS
+// CONFIGURACIÓN
 // ============================================================
 pdfjsLib.GlobalWorkerOptions.workerSrc =
     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
-// ============================================================
-// ESTADO GLOBAL
-// ============================================================
-let mergeFiles = [];
-let currentFileForReorder = null;
-let pageThumbnails = [];
 
 // ============================================================
 // FUNCIONES AUXILIARES
@@ -29,8 +22,10 @@ function showLoading(show) {
 
 function showStatus(elementId, message, isError = false) {
     const el = document.getElementById(elementId);
-    el.textContent = message;
-    el.style.color = isError ? '#d32f2f' : '#1d1d1f';
+    if (el) {
+        el.textContent = message;
+        el.style.color = isError ? '#d32f2f' : '#1d1d1f';
+    }
 }
 
 // ============================================================
@@ -56,22 +51,14 @@ tabs.forEach(tab => {
     });
 });
 
-// Mostrar/ocultar campo de rangos en Dividir
-document.querySelectorAll('input[name="splitMode"]').forEach(radio => {
-    radio.addEventListener('change', () => {
-        const container = document.getElementById('splitRangesContainer');
-        container.style.display = radio.value === 'ranges' ? 'block' : 'none';
-    });
-});
-
 // ============================================================
-// FUNCIONES PARA RENDERIZAR MINIATURAS (genéricas)
+// RENDERIZAR MINIATURA GENÉRICA
 // ============================================================
-async function renderThumbnail(file, canvas) {
+async function renderThumbnail(file, canvas, pageNum = 1) {
     try {
         const arrayBuffer = await readFileAsArrayBuffer(file);
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        const page = await pdf.getPage(1);
+        const page = await pdf.getPage(pageNum);
         const scale = 0.5;
         const viewport = page.getViewport({ scale });
         canvas.width = viewport.width;
@@ -91,8 +78,86 @@ async function renderThumbnail(file, canvas) {
 }
 
 // ============================================================
-// UNIR PDF (Merge)
+// VISTA PREVIA DE PÁGINAS CON SELECCIÓN (Split, Delete, Extract)
 // ============================================================
+async function renderPageGrid(file, gridId, selectionsArray) {
+    const grid = document.getElementById(gridId);
+    if (!grid) return;
+    grid.innerHTML = '';
+    try {
+        const arrayBuffer = await readFileAsArrayBuffer(file);
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const totalPages = pdf.numPages;
+
+        if (selectionsArray.length !== totalPages) {
+            selectionsArray.length = 0;
+            for (let i = 0; i < totalPages; i++) selectionsArray.push(false);
+        }
+
+        for (let i = 0; i < totalPages; i++) {
+            const pageNum = i + 1;
+            const div = document.createElement('div');
+            div.className = 'page-item';
+            div.dataset.index = i;
+
+            const canvas = document.createElement('canvas');
+            div.appendChild(canvas);
+
+            const overlay = document.createElement('div');
+            overlay.className = 'check-overlay';
+            overlay.textContent = '✓';
+            div.appendChild(overlay);
+
+            const label = document.createElement('div');
+            label.className = 'page-number';
+            label.textContent = `Pág. ${pageNum}`;
+            div.appendChild(label);
+
+            function updateStyle() {
+                div.classList.toggle('selected', selectionsArray[i]);
+            }
+
+            div.addEventListener('click', () => {
+                selectionsArray[i] = !selectionsArray[i];
+                updateStyle();
+            });
+
+            grid.appendChild(div);
+            updateStyle();
+
+            try {
+                const page = await pdf.getPage(pageNum);
+                const scale = 0.3;
+                const viewport = page.getViewport({ scale });
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                const ctx = canvas.getContext('2d');
+                await page.render({ canvasContext: ctx, viewport }).promise;
+            } catch (_) {
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#f0f0f2';
+                ctx.fillRect(0, 0, canvas.width || 120, canvas.height || 160);
+                ctx.fillStyle = '#86868b';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('Pág. ' + pageNum, (canvas.width || 120) / 2, (canvas.height || 160) / 2);
+            }
+        }
+
+        const previewId = gridId.replace('PageGrid', 'Preview');
+        const previewEl = document.getElementById(previewId);
+        if (previewEl) previewEl.style.display = 'block';
+
+    } catch (err) {
+        alert('Error al cargar las páginas: ' + err.message);
+    }
+}
+
+// ============================================================
+// MERGE (unir)
+// ============================================================
+let mergeFiles = [];
 const dropZoneMerge = document.getElementById('dropZoneMerge');
 const fileInputMerge = document.getElementById('fileInputMerge');
 const fileListMerge = document.getElementById('fileListMerge');
@@ -159,7 +224,8 @@ function handleMergeFiles(files) {
     fileInputMerge.value = '';
 }
 
-dropZoneMerge.addEventListener('dragover', e => { e.preventDefault(); dropZoneMerge.classList.add('dragover'); });
+dropZoneMerge.addEventListener('dragover', e => { e.preventDefault();
+    dropZoneMerge.classList.add('dragover'); });
 dropZoneMerge.addEventListener('dragleave', () => dropZoneMerge.classList.remove('dragover'));
 dropZoneMerge.addEventListener('drop', e => {
     e.preventDefault();
@@ -168,11 +234,8 @@ dropZoneMerge.addEventListener('drop', e => {
 });
 dropZoneMerge.addEventListener('click', () => fileInputMerge.click());
 fileInputMerge.addEventListener('change', e => handleMergeFiles(e.target.files));
-
-clearMerge.addEventListener('click', () => {
-    mergeFiles = [];
-    renderMergeList();
-});
+clearMerge.addEventListener('click', () => { mergeFiles = [];
+    renderMergeList(); });
 
 mergeBtn.addEventListener('click', async () => {
     if (mergeFiles.length === 0) { alert('No hay archivos para unir'); return; }
@@ -201,14 +264,29 @@ mergeBtn.addEventListener('click', async () => {
 });
 
 // ============================================================
-// DIVIDIR (Split)
+// SPLIT (dividir)
 // ============================================================
+let splitFile = null;
+let splitSelections = [];
 const dropZoneSplit = document.getElementById('dropZoneSplit');
 const fileInputSplit = document.getElementById('fileInputSplit');
 const splitBtn = document.getElementById('splitBtn');
-let splitFile = null;
+const splitRangesInput = document.getElementById('splitRanges');
+const splitRangesContainer = document.getElementById('splitRangesContainer');
 
-dropZoneSplit.addEventListener('dragover', e => { e.preventDefault(); dropZoneSplit.classList.add('dragover'); });
+document.querySelectorAll('input[name="splitMode"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+        splitRangesContainer.style.display = radio.value === 'ranges' ? 'block' : 'none';
+        document.getElementById('splitPreview').style.display = radio.value === 'individual' ? 'block' : 'none';
+    });
+});
+
+async function loadSplitPreview(file) {
+    await renderPageGrid(file, 'splitPageGrid', splitSelections);
+}
+
+dropZoneSplit.addEventListener('dragover', e => { e.preventDefault();
+    dropZoneSplit.classList.add('dragover'); });
 dropZoneSplit.addEventListener('dragleave', () => dropZoneSplit.classList.remove('dragover'));
 dropZoneSplit.addEventListener('drop', e => {
     e.preventDefault();
@@ -218,6 +296,7 @@ dropZoneSplit.addEventListener('drop', e => {
         splitFile = files[0];
         dropZoneSplit.querySelector('p').textContent = `📄 ${splitFile.name}`;
         fileInputSplit.files = files;
+        loadSplitPreview(splitFile);
     }
 });
 dropZoneSplit.addEventListener('click', () => fileInputSplit.click());
@@ -225,21 +304,39 @@ fileInputSplit.addEventListener('change', e => {
     if (e.target.files.length > 0) {
         splitFile = e.target.files[0];
         dropZoneSplit.querySelector('p').textContent = `📄 ${splitFile.name}`;
+        loadSplitPreview(splitFile);
     }
+});
+
+document.getElementById('splitSelectAll').addEventListener('click', () => {
+    for (let i = 0; i < splitSelections.length; i++) splitSelections[i] = true;
+    loadSplitPreview(splitFile);
+});
+document.getElementById('splitDeselectAll').addEventListener('click', () => {
+    for (let i = 0; i < splitSelections.length; i++) splitSelections[i] = false;
+    loadSplitPreview(splitFile);
 });
 
 splitBtn.addEventListener('click', async () => {
     if (!splitFile) { alert('Primero selecciona un PDF'); return; }
     const mode = document.querySelector('input[name="splitMode"]:checked').value;
-    const ranges = document.getElementById('splitRanges').value.trim();
-    if (mode === 'ranges' && !ranges) { alert('Introduce rangos válidos'); return; }
+    let pagesToSend = '';
+    if (mode === 'individual') {
+        const selectedIndices = splitSelections.map((sel, idx) => sel ? idx + 1 : null).filter(v => v !== null);
+        if (selectedIndices.length === 0) { alert('Selecciona al menos una página'); return; }
+        pagesToSend = selectedIndices.join(',');
+    } else {
+        const ranges = splitRangesInput.value.trim();
+        if (!ranges) { alert('Introduce rangos válidos'); return; }
+        pagesToSend = ranges;
+    }
     splitBtn.disabled = true;
     showLoading(true);
     try {
         const formData = new FormData();
         formData.append('file', splitFile);
         formData.append('mode', mode);
-        if (mode === 'ranges') formData.append('ranges', ranges);
+        formData.append('ranges', pagesToSend);
         const resp = await fetch('/split', { method: 'POST', body: formData });
         if (!resp.ok) throw new Error(await resp.text());
         const blob = await resp.blob();
@@ -261,14 +358,21 @@ splitBtn.addEventListener('click', async () => {
 });
 
 // ============================================================
-// ELIMINAR PÁGINAS (Delete)
+// DELETE (eliminar páginas)
 // ============================================================
+let deleteFile = null;
+let deleteSelections = [];
 const dropZoneDelete = document.getElementById('dropZoneDelete');
 const fileInputDelete = document.getElementById('fileInputDelete');
 const deleteBtn = document.getElementById('deleteBtn');
-let deleteFile = null;
+const deletePagesInput = document.getElementById('deletePages');
 
-dropZoneDelete.addEventListener('dragover', e => { e.preventDefault(); dropZoneDelete.classList.add('dragover'); });
+async function loadDeletePreview(file) {
+    await renderPageGrid(file, 'deletePageGrid', deleteSelections);
+}
+
+dropZoneDelete.addEventListener('dragover', e => { e.preventDefault();
+    dropZoneDelete.classList.add('dragover'); });
 dropZoneDelete.addEventListener('dragleave', () => dropZoneDelete.classList.remove('dragover'));
 dropZoneDelete.addEventListener('drop', e => {
     e.preventDefault();
@@ -278,6 +382,7 @@ dropZoneDelete.addEventListener('drop', e => {
         deleteFile = files[0];
         dropZoneDelete.querySelector('p').textContent = `📄 ${deleteFile.name}`;
         fileInputDelete.files = files;
+        loadDeletePreview(deleteFile);
     }
 });
 dropZoneDelete.addEventListener('click', () => fileInputDelete.click());
@@ -285,13 +390,27 @@ fileInputDelete.addEventListener('change', e => {
     if (e.target.files.length > 0) {
         deleteFile = e.target.files[0];
         dropZoneDelete.querySelector('p').textContent = `📄 ${deleteFile.name}`;
+        loadDeletePreview(deleteFile);
     }
+});
+
+document.getElementById('deleteSelectAll').addEventListener('click', () => {
+    for (let i = 0; i < deleteSelections.length; i++) deleteSelections[i] = true;
+    loadDeletePreview(deleteFile);
+});
+document.getElementById('deleteDeselectAll').addEventListener('click', () => {
+    for (let i = 0; i < deleteSelections.length; i++) deleteSelections[i] = false;
+    loadDeletePreview(deleteFile);
 });
 
 deleteBtn.addEventListener('click', async () => {
     if (!deleteFile) { alert('Selecciona un PDF'); return; }
-    const pagesToDelete = document.getElementById('deletePages').value.trim();
-    if (!pagesToDelete) { alert('Introduce páginas a eliminar'); return; }
+    let pagesToDelete = deletePagesInput.value.trim();
+    if (!pagesToDelete) {
+        const selected = deleteSelections.map((sel, idx) => sel ? idx + 1 : null).filter(v => v !== null);
+        if (selected.length === 0) { alert('Selecciona al menos una página o escribe rangos'); return; }
+        pagesToDelete = selected.join(',');
+    }
     deleteBtn.disabled = true;
     showLoading(true);
     try {
@@ -319,14 +438,21 @@ deleteBtn.addEventListener('click', async () => {
 });
 
 // ============================================================
-// EXTRAER PÁGINAS (Extract)
+// EXTRACT (extraer páginas)
 // ============================================================
+let extractFile = null;
+let extractSelections = [];
 const dropZoneExtract = document.getElementById('dropZoneExtract');
 const fileInputExtract = document.getElementById('fileInputExtract');
 const extractBtn = document.getElementById('extractBtn');
-let extractFile = null;
+const extractPagesInput = document.getElementById('extractPages');
 
-dropZoneExtract.addEventListener('dragover', e => { e.preventDefault(); dropZoneExtract.classList.add('dragover'); });
+async function loadExtractPreview(file) {
+    await renderPageGrid(file, 'extractPageGrid', extractSelections);
+}
+
+dropZoneExtract.addEventListener('dragover', e => { e.preventDefault();
+    dropZoneExtract.classList.add('dragover'); });
 dropZoneExtract.addEventListener('dragleave', () => dropZoneExtract.classList.remove('dragover'));
 dropZoneExtract.addEventListener('drop', e => {
     e.preventDefault();
@@ -336,6 +462,7 @@ dropZoneExtract.addEventListener('drop', e => {
         extractFile = files[0];
         dropZoneExtract.querySelector('p').textContent = `📄 ${extractFile.name}`;
         fileInputExtract.files = files;
+        loadExtractPreview(extractFile);
     }
 });
 dropZoneExtract.addEventListener('click', () => fileInputExtract.click());
@@ -343,13 +470,27 @@ fileInputExtract.addEventListener('change', e => {
     if (e.target.files.length > 0) {
         extractFile = e.target.files[0];
         dropZoneExtract.querySelector('p').textContent = `📄 ${extractFile.name}`;
+        loadExtractPreview(extractFile);
     }
+});
+
+document.getElementById('extractSelectAll').addEventListener('click', () => {
+    for (let i = 0; i < extractSelections.length; i++) extractSelections[i] = true;
+    loadExtractPreview(extractFile);
+});
+document.getElementById('extractDeselectAll').addEventListener('click', () => {
+    for (let i = 0; i < extractSelections.length; i++) extractSelections[i] = false;
+    loadExtractPreview(extractFile);
 });
 
 extractBtn.addEventListener('click', async () => {
     if (!extractFile) { alert('Selecciona un PDF'); return; }
-    const pagesToExtract = document.getElementById('extractPages').value.trim();
-    if (!pagesToExtract) { alert('Introduce páginas a extraer'); return; }
+    let pagesToExtract = extractPagesInput.value.trim();
+    if (!pagesToExtract) {
+        const selected = extractSelections.map((sel, idx) => sel ? idx + 1 : null).filter(v => v !== null);
+        if (selected.length === 0) { alert('Selecciona al menos una página o escribe rangos'); return; }
+        pagesToExtract = selected.join(',');
+    }
     extractBtn.disabled = true;
     showLoading(true);
     try {
@@ -377,16 +518,75 @@ extractBtn.addEventListener('click', async () => {
 });
 
 // ============================================================
-// REORDENAR PÁGINAS (Reorder)
+// REORDER (ordenar páginas)
 // ============================================================
+let reorderFile = null;
+let pageOrder = [];
 const dropZoneReorder = document.getElementById('dropZoneReorder');
 const fileInputReorder = document.getElementById('fileInputReorder');
 const reorderBtn = document.getElementById('reorderBtn');
 const pageList = document.getElementById('pageList');
-let reorderFile = null;
-let pageOrder = [];
 
-dropZoneReorder.addEventListener('dragover', e => { e.preventDefault(); dropZoneReorder.classList.add('dragover'); });
+async function loadReorderPages(file) {
+    try {
+        const arrayBuffer = await readFileAsArrayBuffer(file);
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const totalPages = pdf.numPages;
+        pageOrder = Array.from({ length: totalPages }, (_, i) => i + 1);
+        pageList.innerHTML = '';
+        for (let i = 1; i <= totalPages; i++) {
+            const li = document.createElement('li');
+            li.dataset.page = i;
+            const thumbDiv = document.createElement('div');
+            thumbDiv.className = 'thumbnail';
+            const canvas = document.createElement('canvas');
+            thumbDiv.appendChild(canvas);
+            li.appendChild(thumbDiv);
+
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'file-info';
+            const nameSpan = document.createElement('div');
+            nameSpan.className = 'file-name';
+            nameSpan.textContent = `Página ${i}`;
+            infoDiv.appendChild(nameSpan);
+            li.appendChild(infoDiv);
+
+            try {
+                const page = await pdf.getPage(i);
+                const scale = 0.4;
+                const viewport = page.getViewport({ scale });
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                const ctx = canvas.getContext('2d');
+                await page.render({ canvasContext: ctx, viewport }).promise;
+            } catch (_) {
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#f0f0f2';
+                ctx.fillRect(0, 0, canvas.width || 50, canvas.height || 70);
+                ctx.fillStyle = '#86868b';
+                ctx.font = '11px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('Página ' + i, (canvas.width || 50) / 2, (canvas.height || 70) / 2);
+            }
+
+            pageList.appendChild(li);
+        }
+        new Sortable(pageList, {
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            onEnd: function(evt) {
+                const items = pageList.querySelectorAll('li');
+                pageOrder = Array.from(items).map(li => parseInt(li.dataset.page));
+            }
+        });
+    } catch (err) {
+        alert('Error al cargar las páginas: ' + err.message);
+    }
+}
+
+dropZoneReorder.addEventListener('dragover', e => { e.preventDefault();
+    dropZoneReorder.classList.add('dragover'); });
 dropZoneReorder.addEventListener('dragleave', () => dropZoneReorder.classList.remove('dragover'));
 dropZoneReorder.addEventListener('drop', e => {
     e.preventDefault();
@@ -396,7 +596,7 @@ dropZoneReorder.addEventListener('drop', e => {
         reorderFile = files[0];
         dropZoneReorder.querySelector('p').textContent = `📄 ${reorderFile.name}`;
         fileInputReorder.files = files;
-        loadPagesForReorder(reorderFile);
+        loadReorderPages(reorderFile);
     }
 });
 dropZoneReorder.addEventListener('click', () => fileInputReorder.click());
@@ -404,73 +604,9 @@ fileInputReorder.addEventListener('change', e => {
     if (e.target.files.length > 0) {
         reorderFile = e.target.files[0];
         dropZoneReorder.querySelector('p').textContent = `📄 ${reorderFile.name}`;
-        loadPagesForReorder(reorderFile);
+        loadReorderPages(reorderFile);
     }
 });
-
-async function loadPagesForReorder(file) {
-    try {
-        const arrayBuffer = await readFileAsArrayBuffer(file);
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        const totalPages = pdf.numPages;
-        pageOrder = Array.from({ length: totalPages }, (_, i) => i + 1);
-        renderPageThumbnails(pdf, totalPages);
-    } catch (err) {
-        alert('Error al cargar las páginas: ' + err.message);
-    }
-}
-
-async function renderPageThumbnails(pdf, totalPages) {
-    pageList.innerHTML = '';
-    for (let i = 1; i <= totalPages; i++) {
-        const li = document.createElement('li');
-        li.dataset.page = i;
-        const thumbDiv = document.createElement('div');
-        thumbDiv.className = 'thumbnail';
-        const canvas = document.createElement('canvas');
-        thumbDiv.appendChild(canvas);
-        li.appendChild(thumbDiv);
-
-        const infoDiv = document.createElement('div');
-        infoDiv.className = 'file-info';
-        const nameSpan = document.createElement('div');
-        nameSpan.className = 'file-name';
-        nameSpan.textContent = `Página ${i}`;
-        infoDiv.appendChild(nameSpan);
-        li.appendChild(infoDiv);
-
-        // Renderizar miniatura
-        try {
-            const page = await pdf.getPage(i);
-            const scale = 0.4;
-            const viewport = page.getViewport({ scale });
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            const ctx = canvas.getContext('2d');
-            await page.render({ canvasContext: ctx, viewport }).promise;
-        } catch (_) {
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#f0f0f2';
-            ctx.fillRect(0, 0, canvas.width || 50, canvas.height || 70);
-            ctx.fillStyle = '#86868b';
-            ctx.font = '11px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('Página ' + i, (canvas.width || 50) / 2, (canvas.height || 70) / 2);
-        }
-
-        pageList.appendChild(li);
-    }
-    // Inicializar Sortable en la lista de páginas
-    new Sortable(pageList, {
-        animation: 150,
-        ghostClass: 'sortable-ghost',
-        onEnd: function(evt) {
-            const items = pageList.querySelectorAll('li');
-            pageOrder = Array.from(items).map(li => parseInt(li.dataset.page));
-        }
-    });
-}
 
 reorderBtn.addEventListener('click', async () => {
     if (!reorderFile) { alert('Selecciona un PDF'); return; }
@@ -505,3 +641,4 @@ reorderBtn.addEventListener('click', async () => {
 // INICIALIZACIÓN
 // ============================================================
 updateMergeCount();
+console.log('📄 Suite PDF cargada correctamente');

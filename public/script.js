@@ -529,27 +529,26 @@ async function loadReorderPages(file) {
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         const totalPages = pdf.numPages;
         pageOrder = Array.from({ length: totalPages }, (_, i) => i + 1);
+        
         pageList.innerHTML = '';
-        for (let i = 1; i <= totalPages; i++) {
-            const li = document.createElement('li');
-            li.dataset.page = i;
-            const thumbDiv = document.createElement('div');
-            thumbDiv.className = 'thumbnail';
-            const canvas = document.createElement('canvas');
-            thumbDiv.appendChild(canvas);
-            li.appendChild(thumbDiv);
+        pageList.className = 'page-grid-reorder'; // Clase encargada de la distribución en cuadrícula/columnas
 
-            const infoDiv = document.createElement('div');
-            infoDiv.className = 'file-info';
-            const nameSpan = document.createElement('div');
-            nameSpan.className = 'file-name';
-            nameSpan.textContent = `Página ${i}`;
-            infoDiv.appendChild(nameSpan);
-            li.appendChild(infoDiv);
+        for (let i = 1; i <= totalPages; i++) {
+            const div = document.createElement('div');
+            div.className = 'page-item reorder-item';
+            div.dataset.page = i;
+
+            const canvas = document.createElement('canvas');
+            div.appendChild(canvas);
+
+            const label = document.createElement('div');
+            label.className = 'page-number';
+            label.textContent = `Pág. ${i}`;
+            div.appendChild(label);
 
             try {
                 const page = await pdf.getPage(i);
-                const scale = 0.4;
+                const scale = 0.3;
                 const viewport = page.getViewport({ scale });
                 canvas.width = viewport.width;
                 canvas.height = viewport.height;
@@ -558,22 +557,24 @@ async function loadReorderPages(file) {
             } catch (_) {
                 const ctx = canvas.getContext('2d');
                 ctx.fillStyle = '#f0f0f2';
-                ctx.fillRect(0, 0, canvas.width || 50, canvas.height || 70);
+                ctx.fillRect(0, 0, canvas.width || 120, canvas.height || 160);
                 ctx.fillStyle = '#86868b';
-                ctx.font = '11px sans-serif';
+                ctx.font = '12px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText('Página ' + i, (canvas.width || 50) / 2, (canvas.height || 70) / 2);
+                ctx.fillText('Pág. ' + i, (canvas.width || 120) / 2, (canvas.height || 160) / 2);
             }
 
-            pageList.appendChild(li);
+            pageList.appendChild(div);
         }
+
+        // Habilitar la reordenación arrastrando en la cuadrícula de columnas
         new Sortable(pageList, {
             animation: 150,
             ghostClass: 'sortable-ghost',
-            onEnd: function(evt) {
-                const items = pageList.querySelectorAll('li');
-                pageOrder = Array.from(items).map(li => parseInt(li.dataset.page));
+            onEnd: function() {
+                const items = pageList.querySelectorAll('.reorder-item');
+                pageOrder = Array.from(items).map(item => parseInt(item.dataset.page));
             }
         });
     } catch (err) {

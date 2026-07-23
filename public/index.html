@@ -3,185 +3,407 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Suite PDF - Edita tus PDFs</title>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <title>Herramientas PDF</title>
+    <style>
+        :root {
+            --primary-color: #0066cc;
+            --primary-hover: #0052a3;
+            --bg-color: #f5f5f7;
+            --card-bg: #ffffff;
+            --text-color: #1d1d1f;
+            --border-color: #d2d2d7;
+            --error-color: #ff3b30;
+            --success-color: #34c759;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+        }
+
+        /* NAVEGACIÓN PESTAÑAS */
+        .tabs {
+            display: flex;
+            background-color: #e5e5ea;
+            border-bottom: 1px solid var(--border-color);
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 14px 16px;
+            border: none;
+            background: none;
+            font-size: 14px;
+            font-weight: 600;
+            color: #6e6e73;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .tab-btn.active {
+            background: var(--card-bg);
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--primary-color);
+        }
+
+        /* CONTENIDO DE PESTAÑAS */
+        .tab-content {
+            display: none;
+            padding: 24px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        h2 {
+            margin-bottom: 8px;
+            font-size: 20px;
+        }
+
+        p.desc {
+            color: #6e6e73;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        /* DROP ZONE */
+        .drop-zone {
+            border: 2px dashed var(--border-color);
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s;
+            background: #fafafa;
+        }
+
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: var(--primary-color);
+            background: #f0f7ff;
+        }
+
+        .drop-zone input[type="file"] {
+            display: none;
+        }
+
+        /* CONTROLES Y FORMULARIO */
+        .form-group {
+            margin-top: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 6px;
+        }
+
+        input[type="text"], select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .btn-action {
+            width: 100%;
+            margin-top: 20px;
+            padding: 12px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-action:hover {
+            background: var(--primary-hover);
+        }
+
+        .btn-action:disabled {
+            background: #c7c7cc;
+            cursor: not-allowed;
+        }
+
+        /* LISTAS DE ARCHIVOS Y PÁGINAS */
+        .file-list {
+            margin-top: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 14px;
+            background: #f0f0f2;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .btn-remove {
+            background: none;
+            border: none;
+            color: var(--error-color);
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .file-name-display {
+            margin-top: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--primary-color);
+        }
+
+        /* GRILLA REORDENAR PÁGINAS */
+        .page-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 12px;
+            margin-top: 15px;
+            list-style: none;
+            max-height: 350px;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+
+        .reorder-item {
+            background: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 6px;
+            text-align: center;
+            cursor: grab;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .reorder-item canvas {
+            width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+
+        .reorder-item .page-number {
+            font-size: 12px;
+            margin-top: 4px;
+            font-weight: 600;
+        }
+
+        .sortable-ghost {
+            opacity: 0.4;
+        }
+
+        /* ESTADOS Y OVERLAY */
+        .status-msg {
+            margin-top: 15px;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .status-msg.error { color: var(--error-color); }
+        .status-msg.success { color: var(--success-color); }
+
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255, 255, 255, 0.8);
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 1000;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
 </head>
 <body>
 
     <div class="container">
-        <header class="tool-header">
-            <img src="https://i.ibb.co/RTgVzm5q/Suite-PDF-removebg-preview.png" alt="Suite PDF">
-            <p>Une, separa, elimina, extrae y ordena PDF online de forma completamente gratuita. No se necesita instalación. Elige una operación y sube tus archivos.</p>
-        </header>
+        <!-- NAVEGACIÓN PESTAÑAS -->
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="tab-merge">Unir</button>
+            <button class="tab-btn" data-tab="tab-split">Dividir</button>
+            <button class="tab-btn" data-tab="tab-delete">Eliminar</button>
+            <button class="tab-btn" data-tab="tab-extract">Extraer</button>
+            <button class="tab-btn" data-tab="tab-reorder">Reordenar</button>
+            <button class="tab-btn" data-tab="tab-compress">Comprimir</button>
+        </nav>
 
-        <!-- Tabs -->
-        <div class="tabs">
-            <button class="tab active" data-tab="merge">Unir</button>
-            <button class="tab" data-tab="split">Dividir</button>
-            <button class="tab" data-tab="delete">Eliminar páginas</button>
-            <button class="tab" data-tab="extract">Extraer páginas</button>
-            <button class="tab" data-tab="reorder">Ordenar páginas</button>
-            <button class="tab" data-tab="compress">Comprimir</button>
+        <!-- 1. MERGE (UNIR) -->
+        <div id="tab-merge" class="tab-content active">
+            <h2>Unir archivos PDF</h2>
+            <p class="desc">Selecciona o arrastra varios archivos PDF para combinarlos en uno solo.</p>
+            
+            <div class="drop-zone" id="dropZoneMerge">
+                <p>Haz clic o arrastra aquí tus PDFs</p>
+                <input type="file" id="fileInputMerge" multiple accept="application/pdf">
+            </div>
+
+            <div class="file-list" id="mergeFileList"></div>
+            <button type="button" class="btn-action" id="mergeBtn" disabled>Unir PDFs</button>
+            <div id="mergeStatus" class="status-msg"></div>
         </div>
 
-        <!-- Contenido -->
-        <div id="tabContent">
+        <!-- 2. SPLIT (DIVIDIR) -->
+        <div id="tab-split" class="tab-content">
+            <h2>Dividir PDF</h2>
+            <p class="desc">Extrae rangos específicos de un PDF en un nuevo documento.</p>
+            
+            <div class="drop-zone" id="dropZoneSplit">
+                <p>Haz clic para seleccionar el PDF</p>
+                <input type="file" id="fileInputSplit" accept="application/pdf">
+            </div>
+            <div id="splitFileName" class="file-name-display"></div>
 
-            <!-- ==================== MERGE ==================== -->
-            <div id="mergePanel" class="panel active">
-                <div class="upload-area" id="dropZoneMerge">
-                    <p>Arrastra aquí tus PDF o haz clic para seleccionarlos</p>
-                    <input type="file" id="fileInputMerge" accept=".pdf" multiple>
-                </div>
-                <div class="file-list-header">
-                    <h2>Archivos seleccionados</h2>
-                    <span class="file-count" id="fileCountMerge">0 archivos</span>
-                </div>
-                <ul id="fileListMerge" class="file-list"></ul>
-                <div class="actions">
-                    <button id="clearMerge" class="btn btn-secondary">Vaciar lista</button>
-                    <button id="mergeBtn" class="btn btn-primary">Unir PDFs</button>
-                </div>
+            <div class="form-group">
+                <label for="splitRanges">Rangos de páginas (Ej: 1-3, 5, 8-10):</label>
+                <input type="text" id="splitRanges" placeholder="1-5">
             </div>
 
-            <!-- ==================== SPLIT ==================== -->
-            <div id="splitPanel" class="panel">
-                <div class="upload-area" id="dropZoneSplit">
-                    <p>Arrastra o selecciona un PDF para dividir</p>
-                    <input type="file" id="fileInputSplit" accept=".pdf">
-                </div>
-
-                <div style="margin: 16px 0;">
-                    <label>
-                        <input type="radio" name="splitMode" value="individual" checked> Dividir en páginas individuales
-                    </label>
-                    <label style="margin-left: 20px;">
-                        <input type="radio" name="splitMode" value="ranges"> Dividir por rangos
-                    </label>
-                </div>
-
-                <!-- Vista previa de páginas -->
-                <div id="splitPreview" style="display:none; margin-bottom:16px;">
-                    <div class="grid-controls">
-                        <button id="splitSelectAll" class="btn btn-secondary" style="padding:6px 14px;">Seleccionar todas</button>
-                        <button id="splitDeselectAll" class="btn btn-secondary" style="padding:6px 14px;">Deseleccionar todas</button>
-                    </div>
-                    <div id="splitPageGrid" class="page-grid"></div>
-                </div>
-
-                <div id="splitRangesContainer" style="display:none; margin-bottom:16px;">
-                    <label for="splitRanges">Rangos (ej. 1,3-5,7):</label>
-                    <input type="text" id="splitRanges" placeholder="Ej: 1,3-5,7" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
-                </div>
-
-                <div class="actions">
-                    <button id="splitBtn" class="btn btn-primary">Dividir</button>
-                </div>
-                <div id="splitStatus" style="margin-top:12px;"></div>
-            </div>
-
-            <!-- ==================== DELETE ==================== -->
-            <div id="deletePanel" class="panel">
-                <div class="upload-area" id="dropZoneDelete">
-                    <p>Arrastra o selecciona un PDF para eliminar páginas</p>
-                    <input type="file" id="fileInputDelete" accept=".pdf">
-                </div>
-
-                <div id="deletePreview" style="display:none; margin-bottom:16px;">
-                    <div class="grid-controls">
-                        <button id="deleteSelectAll" class="btn btn-secondary" style="padding:6px 14px;">Seleccionar todas</button>
-                        <button id="deleteDeselectAll" class="btn btn-secondary" style="padding:6px 14px;">Deseleccionar todas</button>
-                    </div>
-                    <div id="deletePageGrid" class="page-grid"></div>
-                </div>
-
-                <div style="margin:16px 0;">
-                    <label for="deletePages">O escribe páginas a eliminar (ej. 1,3-5,7):</label>
-                    <input type="text" id="deletePages" placeholder="Ej: 1,3-5,7" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
-                </div>
-
-                <div class="actions">
-                    <button id="deleteBtn" class="btn btn-primary">Eliminar páginas</button>
-                </div>
-                <div id="deleteStatus" style="margin-top:12px;"></div>
-            </div>
-
-            <!-- ==================== EXTRACT ==================== -->
-            <div id="extractPanel" class="panel">
-                <div class="upload-area" id="dropZoneExtract">
-                    <p>Arrastra o selecciona un PDF para extraer páginas</p>
-                    <input type="file" id="fileInputExtract" accept=".pdf">
-                </div>
-
-                <div id="extractPreview" style="display:none; margin-bottom:16px;">
-                    <div class="grid-controls">
-                        <button id="extractSelectAll" class="btn btn-secondary" style="padding:6px 14px;">Seleccionar todas</button>
-                        <button id="extractDeselectAll" class="btn btn-secondary" style="padding:6px 14px;">Deseleccionar todas</button>
-                    </div>
-                    <div id="extractPageGrid" class="page-grid"></div>
-                </div>
-
-                <div style="margin:16px 0;">
-                    <label for="extractPages">O escribe páginas a extraer (ej. 1,3-5,7):</label>
-                    <input type="text" id="extractPages" placeholder="Ej: 1,3-5,7" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
-                </div>
-
-                <div class="actions">
-                    <button id="extractBtn" class="btn btn-primary">Extraer páginas</button>
-                </div>
-                <div id="extractStatus" style="margin-top:12px;"></div>
-            </div>
-
-            <!-- ==================== REORDER ==================== -->
-            <div id="reorderPanel" class="panel">
-                <div class="upload-area" id="dropZoneReorder">
-                    <p>Arrastra o selecciona un PDF para ordenar sus páginas</p>
-                    <input type="file" id="fileInputReorder" accept=".pdf">
-                </div>
-                <div style="margin:16px 0;">
-                    <p>Arrastra las miniaturas para reordenar las páginas</p>
-                    <ul id="pageList" class="file-list" style="min-height:60px;"></ul>
-                </div>
-                <div class="actions">
-                    <button id="reorderBtn" class="btn btn-primary">Aplicar nuevo orden</button>
-                </div>
-                <div id="reorderStatus" style="margin-top:12px;"></div>
-            </div>
-
-            <!-- ==================== COMPRESS ==================== -->
-            <div id="compressPanel" class="panel">
-                <div class="upload-area" id="dropZoneCompress">
-                    <p>Arrastra o selecciona un PDF para comprimir</p>
-                    <input type="file" id="fileInputCompress" accept=".pdf">
-                </div>
-
-                <div style="margin: 16px 0;">
-                    <label style="display:block; margin-bottom:6px; font-weight:600;">Nivel de compresión:</label>
-                    <label style="margin-right:15px;">
-                        <input type="radio" name="compressLevel" value="extreme" checked> Compresión Extrema (menos calidad)
-                    </label>
-                    <label style="margin-right:15px;">
-                        <input type="radio" name="compressLevel" value="recommended"> Compresión Recomendada
-                    </label>
-                    <label>
-                        <input type="radio" name="compressLevel" value="low"> Baja Compresión (alta calidad)
-                    </label>
-                </div>
-
-                <div class="actions">
-                    <button id="compressBtn" class="btn btn-primary">Comprimir PDF</button>
-                </div>
-                <div id="compressStatus" style="margin-top:12px;"></div>
-            </div>
-
+            <button type="button" class="btn-action" id="splitBtn" disabled>Dividir PDF</button>
+            <div id="splitStatus" class="status-msg"></div>
         </div>
 
-        <div id="loading">⏳ Procesando... Por favor espera.</div>
+        <!-- 3. DELETE PAGES (ELIMINAR) -->
+        <div id="tab-delete" class="tab-content">
+            <h2>Eliminar Páginas</h2>
+            <p class="desc">Indica las páginas que quieres eliminar de tu documento.</p>
+
+            <div class="drop-zone" id="dropZoneDelete">
+                <p>Haz clic para seleccionar el PDF</p>
+                <input type="file" id="fileInputDelete" accept="application/pdf">
+            </div>
+            <div id="deleteFileName" class="file-name-display"></div>
+
+            <div class="form-group">
+                <label for="deleteRanges">Páginas a borrar (Ej: 2, 4-6):</label>
+                <input type="text" id="deleteRanges" placeholder="2, 5">
+            </div>
+
+            <button type="button" class="btn-action" id="deleteBtn" disabled>Eliminar Páginas</button>
+            <div id="deleteStatus" class="status-msg"></div>
+        </div>
+
+        <!-- 4. EXTRACT PAGES (EXTRAER) -->
+        <div id="tab-extract" class="tab-content">
+            <h2>Extraer Páginas</h2>
+            <p class="desc">Conserva únicamente las páginas especificadas.</p>
+
+            <div class="drop-zone" id="dropZoneExtract">
+                <p>Haz clic para seleccionar el PDF</p>
+                <input type="file" id="fileInputExtract" accept="application/pdf">
+            </div>
+            <div id="extractFileName" class="file-name-display"></div>
+
+            <div class="form-group">
+                <label for="extractRanges">Páginas a extraer (Ej: 1, 3, 7-9):</label>
+                <input type="text" id="extractRanges" placeholder="1, 3, 5">
+            </div>
+
+            <button type="button" class="btn-action" id="extractBtn" disabled>Extraer Páginas</button>
+            <div id="extractStatus" class="status-msg"></div>
+        </div>
+
+        <!-- 5. REORDER (REORDENAR) -->
+        <div id="tab-reorder" class="tab-content">
+            <h2>Reordenar Páginas</h2>
+            <p class="desc">Arrastra las miniaturas de las páginas para cambiarlas de orden.</p>
+
+            <div class="drop-zone" id="dropZoneReorder">
+                <p>Haz clic para seleccionar el PDF</p>
+                <input type="file" id="fileInputReorder" accept="application/pdf">
+            </div>
+            <div id="reorderFileName" class="file-name-display"></div>
+
+            <ul class="page-grid" id="pageList"></ul>
+
+            <button type="button" class="btn-action" id="reorderBtn" disabled>Guardar Nuevo Orden</button>
+            <div id="reorderStatus" class="status-msg"></div>
+        </div>
+
+        <!-- 6. COMPRESS (COMPRIMIR) -->
+        <div id="tab-compress" class="tab-content">
+            <h2>Comprimir PDF</h2>
+            <p class="desc">Reduce el tamaño optimizando las imágenes del documento.</p>
+
+            <div class="drop-zone" id="dropZoneCompress">
+                <p>Haz clic para seleccionar el PDF</p>
+                <input type="file" id="fileInputCompress" accept="application/pdf">
+            </div>
+            <div id="compressFileName" class="file-name-display"></div>
+
+            <div class="form-group">
+                <label for="compressQuality">Nivel de Calidad / Compresión:</label>
+                <select id="compressQuality">
+                    <option value="0.7">Baja Compresión (Calidad Alta)</option>
+                    <option value="0.5" selected>Compresión Media (Recomendado)</option>
+                    <option value="0.3">Alta Compresión (Archivo Pequeño)</option>
+                </select>
+            </div>
+
+            <button type="button" class="btn-action" id="compressBtn" disabled>Comprimir PDF</button>
+            <div id="compressStatus" class="status-msg"></div>
+        </div>
     </div>
 
+    <!-- PANTALLA DE CARGA -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <p style="margin-top: 15px; font-weight: 500;">Procesando documento...</p>
+    </div>
+
+    <!-- LIBRERÍAS EXTERNAS (PDF.JS Y SORTABLEJS) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+
+    <!-- ARCHIVO DE LÓGICA FRONTEND -->
     <script src="script.js"></script>
 </body>
 </html>

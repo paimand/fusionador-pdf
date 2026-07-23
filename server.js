@@ -73,8 +73,6 @@ app.post('/split', upload.single('file'), async (req, res) => {
 
         if (mode === 'individual') {
             // Dividir en páginas individuales (devolver un ZIP)
-            // Por ahora, devolvemos el mismo PDF (podrías implementar ZIP con archiver)
-            // O devolvemos un PDF con la primera página y un mensaje
             return res.status(501).send('Dividir en páginas individuales requiere generar un ZIP. Pendiente de implementar.');
         } else {
             // Dividir por rangos
@@ -200,7 +198,7 @@ app.post('/compress', upload.single('file'), async (req, res) => {
         const totalPages = pdf.numPages;
 
         // 2. Definir parámetros según nivel
-        let scale, quality, maxWidth;
+        let maxWidth, quality;
         switch (level) {
             case 'extreme':
                 maxWidth = 600;

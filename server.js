@@ -181,21 +181,20 @@ app.post('/reorder-pages', upload.single('file'), async (req, res) => {
     }
 });
 
-// ========== RUTA: COMPRIMIR PDF (con Jimp) ==========
+// ========== RUTA: COMPRIMIR PDF (CORREGIDA) ==========
 app.post('/compress', upload.single('file'), async (req, res) => {
     try {
         const file = req.file;
         if (!file) return res.status(400).send('No se subió ningún archivo');
 
-        const level = req.body.level || 'recommended'; // 'extreme', 'recommended', 'low'
+        const level = req.body.level || 'recommended';
 
-        // 1. Cargar el PDF con pdfjs (versión 3.11.174)
+        // 1. Cargar el PDF con pdfjs
         const data = new Uint8Array(file.buffer);
         const loadingTask = pdfjsLib.getDocument({ data });
         const pdf = await loadingTask.promise;
         const totalPages = pdf.numPages;
 
-        // 2. Definir parámetros según nivel
         let maxWidth, quality;
         switch (level) {
             case 'extreme':
@@ -215,15 +214,11 @@ app.post('/compress', upload.single('file'), async (req, res) => {
                 quality = 80;
         }
 
-        // 3. Crear un nuevo PDF con pdf-lib
         const newPdf = await PDFDocument.create();
 
-        // 4. Procesar cada página
         for (let i = 1; i <= totalPages; i++) {
             const page = await pdf.getPage(i);
             const viewport = page.getViewport({ scale: 1.0 });
-            
-            // Calcular dimensiones manteniendo proporción
             let width = viewport.width;
             let height = viewport.height;
             if (width > maxWidth) {
@@ -234,25 +229,24 @@ app.post('/compress', upload.single('file'), async (req, res) => {
 
             const canvas = createCanvas(width, height);
             const context = canvas.getContext('2d');
-            
-            // Renderizar la página al canvas
+
+            // ✅ FONDO BLANCO para evitar transparencia
+            context.fillStyle = 'white';
+            context.fillRect(0, 0, width, height);
+
+            // Renderizar la página
             await page.render({ canvasContext: context, viewport: viewport }).promise;
 
-            // Obtener el buffer de la imagen (PNG)
             const pngBuffer = canvas.toBuffer('image/png');
-
-            // Comprimir la imagen con Jimp (calidad ajustada)
             const image = await Jimp.read(pngBuffer);
             image.quality(quality);
             const jpegBuffer = await image.getBufferAsync(Jimp.MIME_JPEG);
 
-            // Incrustar la imagen JPEG en el nuevo PDF
             const img = await newPdf.embedJpg(jpegBuffer);
             const imgDims = img.scale(1);
             const pageWidth = imgDims.width;
             const pageHeight = imgDims.height;
 
-            // Añadir una página al nuevo PDF con el tamaño de la imagen
             const newPage = newPdf.addPage([pageWidth, pageHeight]);
             newPage.drawImage(img, {
                 x: 0,
@@ -262,9 +256,7 @@ app.post('/compress', upload.single('file'), async (req, res) => {
             });
         }
 
-        // 5. Guardar el PDF comprimido
         const pdfBytes = await newPdf.save();
-
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename=compressed_${level}.pdf`);
         res.send(Buffer.from(pdfBytes));

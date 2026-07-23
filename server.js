@@ -4,7 +4,7 @@ const { PDFDocument } = require('pdf-lib');
 const path = require('path');
 const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
 const { createCanvas } = require('canvas');
-const sharp = require('sharp');
+const Jimp = require('jimp');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -72,10 +72,8 @@ app.post('/split', upload.single('file'), async (req, res) => {
         const totalPages = pdf.getPageCount();
 
         if (mode === 'individual') {
-            // Dividir en páginas individuales (devolver un ZIP)
             return res.status(501).send('Dividir en páginas individuales requiere generar un ZIP. Pendiente de implementar.');
         } else {
-            // Dividir por rangos
             const pageIndices = parsePageRanges(rangesStr, totalPages);
             if (pageIndices.length === 0) {
                 return res.status(400).send('No se especificaron rangos válidos');
@@ -183,7 +181,7 @@ app.post('/reorder-pages', upload.single('file'), async (req, res) => {
     }
 });
 
-// ========== RUTA: COMPRIMIR PDF ==========
+// ========== RUTA: COMPRIMIR PDF (con Jimp) ==========
 app.post('/compress', upload.single('file'), async (req, res) => {
     try {
         const file = req.file;
@@ -191,7 +189,7 @@ app.post('/compress', upload.single('file'), async (req, res) => {
 
         const level = req.body.level || 'recommended'; // 'extreme', 'recommended', 'low'
 
-        // 1. Cargar el PDF con pdfjs
+        // 1. Cargar el PDF con pdfjs (versión 3.11.174)
         const data = new Uint8Array(file.buffer);
         const loadingTask = pdfjsLib.getDocument({ data });
         const pdf = await loadingTask.promise;
@@ -224,7 +222,8 @@ app.post('/compress', upload.single('file'), async (req, res) => {
         for (let i = 1; i <= totalPages; i++) {
             const page = await pdf.getPage(i);
             const viewport = page.getViewport({ scale: 1.0 });
-            // Calcular dimensiones para el canvas (manteniendo proporción)
+            
+            // Calcular dimensiones manteniendo proporción
             let width = viewport.width;
             let height = viewport.height;
             if (width > maxWidth) {
@@ -235,28 +234,27 @@ app.post('/compress', upload.single('file'), async (req, res) => {
 
             const canvas = createCanvas(width, height);
             const context = canvas.getContext('2d');
-
+            
             // Renderizar la página al canvas
             await page.render({ canvasContext: context, viewport: viewport }).promise;
 
             // Obtener el buffer de la imagen (PNG)
             const pngBuffer = canvas.toBuffer('image/png');
 
-            // Comprimir la imagen con sharp (convertir a JPEG con calidad ajustada)
-            const jpegBuffer = await sharp(pngBuffer)
-                .jpeg({ quality: quality, progressive: true })
-                .toBuffer();
+            // Comprimir la imagen con Jimp (calidad ajustada)
+            const image = await Jimp.read(pngBuffer);
+            image.quality(quality);
+            const jpegBuffer = await image.getBufferAsync(Jimp.MIME_JPEG);
 
             // Incrustar la imagen JPEG en el nuevo PDF
-            const image = await newPdf.embedJpg(jpegBuffer);
-            // Obtener dimensiones de la imagen incrustada
-            const imgDims = image.scale(1);
+            const img = await newPdf.embedJpg(jpegBuffer);
+            const imgDims = img.scale(1);
             const pageWidth = imgDims.width;
             const pageHeight = imgDims.height;
 
             // Añadir una página al nuevo PDF con el tamaño de la imagen
             const newPage = newPdf.addPage([pageWidth, pageHeight]);
-            newPage.drawImage(image, {
+            newPage.drawImage(img, {
                 x: 0,
                 y: 0,
                 width: pageWidth,

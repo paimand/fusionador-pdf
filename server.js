@@ -15,7 +15,7 @@ app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 app.use(express.static('public'));
 
 // ============================================================
-// ENDPOINT: MERGE (UNIR PDFs) - SOLUCIÓN PÁGINAS EN BLANCO
+// ENDPOINT: MERGE (UNIR PDFs)
 // ============================================================
 app.post('/merge', upload.array('pdfs'), async (req, res) => {
     try {
@@ -27,7 +27,6 @@ app.post('/merge', upload.array('pdfs'), async (req, res) => {
 
         for (const file of req.files) {
             try {
-                // ignoreEncryption & throwOnInvalidObject omiten bloqueos de PDFs bancarios
                 const pdfToMerge = await PDFDocument.load(file.buffer, {
                     ignoreEncryption: true,
                     throwOnInvalidObject: false
@@ -46,8 +45,7 @@ app.post('/merge', upload.array('pdfs'), async (req, res) => {
             }
         }
 
-        // useObjectStreams: false asegura la compatibilidad de fuentes vectoriales
-        const pdfBytes = await mergedPdf.save({ useObjectStreams: false });
+        const pdfBytes = await mergedPdf.save();
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', 'attachment; filename="merged.pdf"');
         return res.send(Buffer.from(pdfBytes));
@@ -73,7 +71,7 @@ app.post('/split', upload.single('file'), async (req, res) => {
         const copiedPages = await newPdf.copyPages(pdfDoc, pageIndexes);
         copiedPages.forEach((page) => newPdf.addPage(page));
 
-        const pdfBytes = await newPdf.save({ useObjectStreams: false });
+        const pdfBytes = await newPdf.save();
         res.setHeader('Content-Type', 'application/pdf');
         return res.send(Buffer.from(pdfBytes));
     } catch (err) {
@@ -99,7 +97,7 @@ app.post('/delete-pages', upload.single('file'), async (req, res) => {
         const copiedPages = await newPdf.copyPages(pdfDoc, keepIndexes);
         copiedPages.forEach((page) => newPdf.addPage(page));
 
-        const pdfBytes = await newPdf.save({ useObjectStreams: false });
+        const pdfBytes = await newPdf.save();
         res.setHeader('Content-Type', 'application/pdf');
         return res.send(Buffer.from(pdfBytes));
     } catch (err) {
@@ -123,7 +121,7 @@ app.post('/extract-pages', upload.single('file'), async (req, res) => {
         const copiedPages = await newPdf.copyPages(pdfDoc, keepIndexes);
         copiedPages.forEach((page) => newPdf.addPage(page));
 
-        const pdfBytes = await newPdf.save({ useObjectStreams: false });
+        const pdfBytes = await newPdf.save();
         res.setHeader('Content-Type', 'application/pdf');
         return res.send(Buffer.from(pdfBytes));
     } catch (err) {
@@ -138,7 +136,7 @@ app.post('/reorder-pages', upload.single('file'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).send('No se ha subido ningún archivo.');
 
-        const newOrder = JSON.parse(req.body.newOrder); // Ej: [3, 1, 2]
+        const newOrder = JSON.parse(req.body.newOrder);
         const pdfDoc = await PDFDocument.load(req.file.buffer, { ignoreEncryption: true, throwOnInvalidObject: false });
 
         const zeroBasedIndexes = newOrder.map(num => num - 1);
@@ -147,7 +145,7 @@ app.post('/reorder-pages', upload.single('file'), async (req, res) => {
         const copiedPages = await newPdf.copyPages(pdfDoc, zeroBasedIndexes);
         copiedPages.forEach((page) => newPdf.addPage(page));
 
-        const pdfBytes = await newPdf.save({ useObjectStreams: false });
+        const pdfBytes = await newPdf.save();
         res.setHeader('Content-Type', 'application/pdf');
         return res.send(Buffer.from(pdfBytes));
     } catch (err) {

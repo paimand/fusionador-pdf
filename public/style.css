@@ -29,15 +29,19 @@ body {
     margin-bottom: 28px;
 }
 
-.tool-header h1 {
-    font-size: 32px;
-    font-weight: 700;
-    color: #1d1d1f;
+.tool-header img {
+    max-width: 280px;
+    width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto 12px;
 }
 
 .tool-header p {
     color: #6e6e73;
     font-size: 18px;
+    max-width: 700px;
+    margin: 0 auto;
 }
 
 /* ===== TABS ===== */
@@ -66,8 +70,8 @@ body {
 }
 
 .tab.active {
-    color: #0071e3;
-    border-bottom-color: #0071e3;
+    color: #ec9b59;
+    border-bottom-color: #ec9b59;
 }
 
 /* ===== PANELES ===== */
@@ -85,7 +89,7 @@ body {
     border-radius: 18px;
     padding: 36px 20px;
     text-align: center;
-    background: #fafafc;
+    background: rgba(236, 155, 89, 0.2);
     cursor: pointer;
     transition: background 0.2s, border-color 0.2s;
     margin-bottom: 20px;
@@ -93,13 +97,13 @@ body {
 }
 
 .upload-area:hover {
-    background: #f5f5fa;
-    border-color: #0071e3;
+    background: rgba(236, 155, 89, 0.35);
+    border-color: #ec9b59;
 }
 
 .upload-area.dragover {
-    background: #e8f1ff;
-    border-color: #0071e3;
+    background: rgba(236, 155, 89, 0.5);
+    border-color: #ec9b59;
 }
 
 .upload-area input[type="file"] {
@@ -160,7 +164,7 @@ body {
 .file-list li.sortable-ghost {
     opacity: 0.4;
     background: #e8f1ff;
-    border: 1px dashed #0071e3;
+    border: 1px dashed #ec9b59;
 }
 
 .file-list li .thumbnail {
@@ -229,12 +233,12 @@ body {
 }
 
 .page-item:hover {
-    border-color: #0071e3;
+    border-color: #ec9b59;
 }
 
 .page-item.selected {
-    border-color: #0071e3;
-    box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.3);
+    border-color: #ec9b59;
+    box-shadow: 0 0 0 3px rgba(236, 155, 89, 0.3);
 }
 
 .page-item canvas {
@@ -253,7 +257,7 @@ body {
     position: absolute;
     top: 6px;
     right: 6px;
-    background: #0071e3;
+    background: #ec9b59;
     color: #fff;
     border-radius: 50%;
     width: 24px;
@@ -303,12 +307,12 @@ body {
 }
 
 .btn-primary {
-    background: #0071e3;
+    background: #ec9b59;
     color: #fff;
 }
 
 .btn-primary:hover {
-    background: #005bbf;
+    background: #d6843e;
 }
 
 .btn-primary:disabled {
@@ -331,7 +335,7 @@ body {
     text-align: center;
     font-size: 16px;
     font-weight: 500;
-    color: #0071e3;
+    color: #ec9b59;
     display: none;
 }
 
@@ -357,5 +361,9 @@ body {
 
     .page-grid {
         grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    }
+
+    .tool-header img {
+        max-width: 200px;
     }
 }

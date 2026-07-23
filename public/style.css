@@ -260,6 +260,7 @@ body {
     width: 100% !important;
     height: auto !important;
     border-radius: 4px;
+    pointer-events: none; /* Asegura que el clic/arrastre se capture en la tarjeta */
 }
 
 .page-item .page-number, #pageList .reorder-item .page-number {

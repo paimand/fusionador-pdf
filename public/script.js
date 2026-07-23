@@ -29,7 +29,8 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         btn.classList.add('active');
-        document.getElementById(btn.dataset.tab).classList.add('active');
+        const targetTab = document.getElementById(btn.dataset.tab);
+        if (targetTab) targetTab.classList.add('active');
     });
 });
 
@@ -42,16 +43,18 @@ const fileInputMerge = document.getElementById('fileInputMerge');
 const mergeFileList = document.getElementById('mergeFileList');
 const mergeBtn = document.getElementById('mergeBtn');
 
-dropZoneMerge.addEventListener('click', () => fileInputMerge.click());
-fileInputMerge.addEventListener('change', (e) => handleMergeFiles(e.target.files));
+if (dropZoneMerge && fileInputMerge) {
+    dropZoneMerge.addEventListener('click', () => fileInputMerge.click());
+    fileInputMerge.addEventListener('change', (e) => handleMergeFiles(e.target.files));
 
-dropZoneMerge.addEventListener('dragover', (e) => { e.preventDefault(); dropZoneMerge.classList.add('dragover'); });
-dropZoneMerge.addEventListener('dragleave', () => dropZoneMerge.classList.remove('dragover'));
-dropZoneMerge.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZoneMerge.classList.remove('dragover');
-    handleMergeFiles(e.dataTransfer.files);
-});
+    dropZoneMerge.addEventListener('dragover', (e) => { e.preventDefault(); dropZoneMerge.classList.add('dragover'); });
+    dropZoneMerge.addEventListener('dragleave', () => dropZoneMerge.classList.remove('dragover'));
+    dropZoneMerge.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZoneMerge.classList.remove('dragover');
+        handleMergeFiles(e.dataTransfer.files);
+    });
+}
 
 function handleMergeFiles(files) {
     for (const file of files) {
@@ -61,6 +64,7 @@ function handleMergeFiles(files) {
 }
 
 function renderMergeList() {
+    if (!mergeFileList) return;
     mergeFileList.innerHTML = '';
     mergeFiles.forEach((file, index) => {
         const item = document.createElement('div');
@@ -71,7 +75,7 @@ function renderMergeList() {
         `;
         mergeFileList.appendChild(item);
     });
-    mergeBtn.disabled = mergeFiles.length < 2;
+    if (mergeBtn) mergeBtn.disabled = mergeFiles.length < 2;
 }
 
 window.removeMergeFile = function(index) {
@@ -79,37 +83,39 @@ window.removeMergeFile = function(index) {
     renderMergeList();
 };
 
-mergeBtn.addEventListener('click', async () => {
-    if (mergeFiles.length < 2) return;
-    mergeBtn.disabled = true;
-    showLoading(true);
-    showStatus('mergeStatus', '⏳ Procesando unión de archivos...');
+if (mergeBtn) {
+    mergeBtn.addEventListener('click', async () => {
+        if (mergeFiles.length < 2) return;
+        mergeBtn.disabled = true;
+        showLoading(true);
+        showStatus('mergeStatus', '⏳ Procesando unión de archivos...');
 
-    try {
-        const formData = new FormData();
-        mergeFiles.forEach(file => formData.append('pdfs', file));
+        try {
+            const formData = new FormData();
+            mergeFiles.forEach(file => formData.append('pdfs', file));
 
-        const resp = await fetch('/merge', { method: 'POST', body: formData });
-        if (!resp.ok) throw new Error(await resp.text());
+            const resp = await fetch('/merge', { method: 'POST', body: formData });
+            if (!resp.ok) throw new Error(await resp.text());
 
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'merged.pdf';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'merged.pdf';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
 
-        showStatus('mergeStatus', '✅ Unificado correctamente');
-    } catch (err) {
-        showStatus('mergeStatus', '❌ ' + err.message, true);
-    } finally {
-        mergeBtn.disabled = false;
-        showLoading(false);
-    }
-});
+            showStatus('mergeStatus', '✅ Unificado correctamente');
+        } catch (err) {
+            showStatus('mergeStatus', '❌ ' + err.message, true);
+        } finally {
+            mergeBtn.disabled = false;
+            showLoading(false);
+        }
+    });
+}
 
 // ============================================================
 // 2. SPLIT (DIVIDIR)
@@ -119,42 +125,48 @@ const dropZoneSplit = document.getElementById('dropZoneSplit');
 const fileInputSplit = document.getElementById('fileInputSplit');
 const splitBtn = document.getElementById('splitBtn');
 
-dropZoneSplit.addEventListener('click', () => fileInputSplit.click());
-fileInputSplit.addEventListener('change', (e) => {
-    if (e.target.files[0]) {
-        splitFile = e.target.files[0];
-        document.getElementById('splitFileName').textContent = '📄 ' + splitFile.name;
-        splitBtn.disabled = false;
-    }
-});
+if (dropZoneSplit && fileInputSplit) {
+    dropZoneSplit.addEventListener('click', () => fileInputSplit.click());
+    fileInputSplit.addEventListener('change', (e) => {
+        if (e.target.files[0]) {
+            splitFile = e.target.files[0];
+            const nameEl = document.getElementById('splitFileName');
+            if (nameEl) nameEl.textContent = '📄 ' + splitFile.name;
+            if (splitBtn) splitBtn.disabled = false;
+        }
+    });
+}
 
-splitBtn.addEventListener('click', async () => {
-    const ranges = document.getElementById('splitRanges').value.trim();
-    if (!splitFile || !ranges) return;
+if (splitBtn) {
+    splitBtn.addEventListener('click', async () => {
+        const rangesEl = document.getElementById('splitRanges');
+        const ranges = rangesEl ? rangesEl.value.trim() : '';
+        if (!splitFile || !ranges) return;
 
-    showLoading(true);
-    try {
-        const formData = new FormData();
-        formData.append('file', splitFile);
-        formData.append('ranges', ranges);
+        showLoading(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', splitFile);
+            formData.append('ranges', ranges);
 
-        const resp = await fetch('/split', { method: 'POST', body: formData });
-        if (!resp.ok) throw new Error(await resp.text());
+            const resp = await fetch('/split', { method: 'POST', body: formData });
+            if (!resp.ok) throw new Error(await resp.text());
 
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'split.pdf';
-        a.click();
-        URL.revokeObjectURL(url);
-        showStatus('splitStatus', '✅ PDF dividido con éxito');
-    } catch (err) {
-        showStatus('splitStatus', '❌ ' + err.message, true);
-    } finally {
-        showLoading(false);
-    }
-});
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'split.pdf';
+            a.click();
+            URL.revokeObjectURL(url);
+            showStatus('splitStatus', '✅ PDF dividido con éxito');
+        } catch (err) {
+            showStatus('splitStatus', '❌ ' + err.message, true);
+        } finally {
+            showLoading(false);
+        }
+    });
+}
 
 // ============================================================
 // 3. DELETE PAGES (ELIMINAR PÁGINAS)
@@ -164,42 +176,48 @@ const dropZoneDelete = document.getElementById('dropZoneDelete');
 const fileInputDelete = document.getElementById('fileInputDelete');
 const deleteBtn = document.getElementById('deleteBtn');
 
-dropZoneDelete.addEventListener('click', () => fileInputDelete.click());
-fileInputDelete.addEventListener('change', (e) => {
-    if (e.target.files[0]) {
-        deleteFile = e.target.files[0];
-        document.getElementById('deleteFileName').textContent = '📄 ' + deleteFile.name;
-        deleteBtn.disabled = false;
-    }
-});
+if (dropZoneDelete && fileInputDelete) {
+    dropZoneDelete.addEventListener('click', () => fileInputDelete.click());
+    fileInputDelete.addEventListener('change', (e) => {
+        if (e.target.files[0]) {
+            deleteFile = e.target.files[0];
+            const nameEl = document.getElementById('deleteFileName');
+            if (nameEl) nameEl.textContent = '📄 ' + deleteFile.name;
+            if (deleteBtn) deleteBtn.disabled = false;
+        }
+    });
+}
 
-deleteBtn.addEventListener('click', async () => {
-    const pagesToDelete = document.getElementById('deleteRanges').value.trim();
-    if (!deleteFile || !pagesToDelete) return;
+if (deleteBtn) {
+    deleteBtn.addEventListener('click', async () => {
+        const rangesEl = document.getElementById('deleteRanges');
+        const pagesToDelete = rangesEl ? rangesEl.value.trim() : '';
+        if (!deleteFile || !pagesToDelete) return;
 
-    showLoading(true);
-    try {
-        const formData = new FormData();
-        formData.append('file', deleteFile);
-        formData.append('pagesToDelete', pagesToDelete);
+        showLoading(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', deleteFile);
+            formData.append('pagesToDelete', pagesToDelete);
 
-        const resp = await fetch('/delete-pages', { method: 'POST', body: formData });
-        if (!resp.ok) throw new Error(await resp.text());
+            const resp = await fetch('/delete-pages', { method: 'POST', body: formData });
+            if (!resp.ok) throw new Error(await resp.text());
 
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'modificado.pdf';
-        a.click();
-        URL.revokeObjectURL(url);
-        showStatus('deleteStatus', '✅ Páginas eliminadas con éxito');
-    } catch (err) {
-        showStatus('deleteStatus', '❌ ' + err.message, true);
-    } finally {
-        showLoading(false);
-    }
-});
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'modificado.pdf';
+            a.click();
+            URL.revokeObjectURL(url);
+            showStatus('deleteStatus', '✅ Páginas eliminadas con éxito');
+        } catch (err) {
+            showStatus('deleteStatus', '❌ ' + err.message, true);
+        } finally {
+            showLoading(false);
+        }
+    });
+}
 
 // ============================================================
 // 4. EXTRACT PAGES (EXTRAER PÁGINAS)
@@ -209,45 +227,51 @@ const dropZoneExtract = document.getElementById('dropZoneExtract');
 const fileInputExtract = document.getElementById('fileInputExtract');
 const extractBtn = document.getElementById('extractBtn');
 
-dropZoneExtract.addEventListener('click', () => fileInputExtract.click());
-fileInputExtract.addEventListener('change', (e) => {
-    if (e.target.files[0]) {
-        extractFile = e.target.files[0];
-        document.getElementById('extractFileName').textContent = '📄 ' + extractFile.name;
-        extractBtn.disabled = false;
-    }
-});
+if (dropZoneExtract && fileInputExtract) {
+    dropZoneExtract.addEventListener('click', () => fileInputExtract.click());
+    fileInputExtract.addEventListener('change', (e) => {
+        if (e.target.files[0]) {
+            extractFile = e.target.files[0];
+            const nameEl = document.getElementById('extractFileName');
+            if (nameEl) nameEl.textContent = '📄 ' + extractFile.name;
+            if (extractBtn) extractBtn.disabled = false;
+        }
+    });
+}
 
-extractBtn.addEventListener('click', async () => {
-    const pagesToExtract = document.getElementById('extractRanges').value.trim();
-    if (!extractFile || !pagesToExtract) return;
+if (extractBtn) {
+    extractBtn.addEventListener('click', async () => {
+        const rangesEl = document.getElementById('extractRanges');
+        const pagesToExtract = rangesEl ? rangesEl.value.trim() : '';
+        if (!extractFile || !pagesToExtract) return;
 
-    showLoading(true);
-    try {
-        const formData = new FormData();
-        formData.append('file', extractFile);
-        formData.append('pagesToExtract', pagesToExtract);
+        showLoading(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', extractFile);
+            formData.append('pagesToExtract', pagesToExtract);
 
-        const resp = await fetch('/extract-pages', { method: 'POST', body: formData });
-        if (!resp.ok) throw new Error(await resp.text());
+            const resp = await fetch('/extract-pages', { method: 'POST', body: formData });
+            if (!resp.ok) throw new Error(await resp.text());
 
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'extraido.pdf';
-        a.click();
-        URL.revokeObjectURL(url);
-        showStatus('extractStatus', '✅ Páginas extraídas con éxito');
-    } catch (err) {
-        showStatus('extractStatus', '❌ ' + err.message, true);
-    } finally {
-        showLoading(false);
-    }
-});
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'extraido.pdf';
+            a.click();
+            URL.revokeObjectURL(url);
+            showStatus('extractStatus', '✅ Páginas extraídas con éxito');
+        } catch (err) {
+            showStatus('extractStatus', '❌ ' + err.message, true);
+        } finally {
+            showLoading(false);
+        }
+    });
+}
 
 // ============================================================
-// 5. REORDER (REORDENAR PÁGINAS - CON VISTA PREVIA Y DRAG & DROP)
+// 5. REORDER (REORDENAR PÁGINAS CON DRAG & DROP)
 // ============================================================
 let reorderFile = null;
 let pageOrder = [];
@@ -256,19 +280,23 @@ const fileInputReorder = document.getElementById('fileInputReorder');
 const reorderBtn = document.getElementById('reorderBtn');
 const pageList = document.getElementById('pageList');
 
-dropZoneReorder.addEventListener('click', () => fileInputReorder.click());
-fileInputReorder.addEventListener('change', async (e) => {
-    if (e.target.files[0]) {
-        reorderFile = e.target.files[0];
-        document.getElementById('reorderFileName').textContent = '📄 ' + reorderFile.name;
-        showLoading(true);
-        await loadReorderPages(reorderFile);
-        showLoading(false);
-        reorderBtn.disabled = false;
-    }
-});
+if (dropZoneReorder && fileInputReorder) {
+    dropZoneReorder.addEventListener('click', () => fileInputReorder.click());
+    fileInputReorder.addEventListener('change', async (e) => {
+        if (e.target.files[0]) {
+            reorderFile = e.target.files[0];
+            const nameEl = document.getElementById('reorderFileName');
+            if (nameEl) nameEl.textContent = '📄 ' + reorderFile.name;
+            showLoading(true);
+            await loadReorderPages(reorderFile);
+            showLoading(false);
+            if (reorderBtn) reorderBtn.disabled = false;
+        }
+    });
+}
 
 async function loadReorderPages(file) {
+    if (!pageList) return;
     try {
         const arrayBuffer = await readFileAsArrayBuffer(file);
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -282,7 +310,7 @@ async function loadReorderPages(file) {
             li.dataset.page = i;
 
             const canvas = document.createElement('canvas');
-            canvas.style.pointerEvents = 'none'; // Evita interferencias al arrastrar
+            canvas.style.pointerEvents = 'none';
             li.appendChild(canvas);
 
             const label = document.createElement('div');
@@ -312,109 +340,118 @@ async function loadReorderPages(file) {
             pageList.appendChild(li);
         }
 
-        // Inicializamos Sortable sobre elementos <li>
-        new Sortable(pageList, {
-            animation: 150,
-            ghostClass: 'sortable-ghost',
-            draggable: '.reorder-item',
-            onEnd: function() {
-                const items = pageList.querySelectorAll('.reorder-item');
-                pageOrder = Array.from(items).map(item => parseInt(item.dataset.page));
-            }
-        });
+        if (window.Sortable) {
+            new Sortable(pageList, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                draggable: '.reorder-item',
+                onEnd: function() {
+                    const items = pageList.querySelectorAll('.reorder-item');
+                    pageOrder = Array.from(items).map(item => parseInt(item.dataset.page));
+                }
+            });
+        }
     } catch (err) {
         alert('Error al cargar las páginas: ' + err.message);
     }
 }
 
-reorderBtn.addEventListener('click', async () => {
-    if (!reorderFile || pageOrder.length === 0) return;
+if (reorderBtn) {
+    reorderBtn.addEventListener('click', async () => {
+        if (!reorderFile || pageOrder.length === 0) return;
 
-    showLoading(true);
-    try {
-        const formData = new FormData();
-        formData.append('file', reorderFile);
-        formData.append('newOrder', JSON.stringify(pageOrder));
+        showLoading(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', reorderFile);
+            formData.append('newOrder', JSON.stringify(pageOrder));
 
-        const resp = await fetch('/reorder-pages', { method: 'POST', body: formData });
-        if (!resp.ok) throw new Error(await resp.text());
+            const resp = await fetch('/reorder-pages', { method: 'POST', body: formData });
+            if (!resp.ok) throw new Error(await resp.text());
 
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'reordenado.pdf';
-        a.click();
-        URL.revokeObjectURL(url);
-        showStatus('reorderStatus', '✅ Páginas reordenadas con éxito');
-    } catch (err) {
-        showStatus('reorderStatus', '❌ ' + err.message, true);
-    } finally {
-        showLoading(false);
-    }
-});
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'reordenado.pdf';
+            a.click();
+            URL.revokeObjectURL(url);
+            showStatus('reorderStatus', '✅ Páginas reordenadas con éxito');
+        } catch (err) {
+            showStatus('reorderStatus', '❌ ' + err.message, true);
+        } finally {
+            showLoading(false);
+        }
+    });
+}
 
 // ============================================================
-// 6. COMPRESS (COMPRIMIR RECONSTRUYENDO PÁGINAS)
+// 6. COMPRESS (COMPRIMIR)
 // ============================================================
 let compressFile = null;
 const dropZoneCompress = document.getElementById('dropZoneCompress');
 const fileInputCompress = document.getElementById('fileInputCompress');
 const compressBtn = document.getElementById('compressBtn');
 
-dropZoneCompress.addEventListener('click', () => fileInputCompress.click());
-fileInputCompress.addEventListener('change', (e) => {
-    if (e.target.files[0]) {
-        compressFile = e.target.files[0];
-        document.getElementById('compressFileName').textContent = '📄 ' + compressFile.name;
-        compressBtn.disabled = false;
-    }
-});
-
-compressBtn.addEventListener('click', async () => {
-    if (!compressFile) return;
-
-    showLoading(true);
-    showStatus('compressStatus', '⏳ Optimizando y comprimiendo el PDF...');
-
-    try {
-        const quality = parseFloat(document.getElementById('compressQuality').value) || 0.6;
-        const arrayBuffer = await readFileAsArrayBuffer(compressFile);
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        const images = [];
-
-        for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 1.2 });
-
-            const canvas = document.createElement('canvas');
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            const ctx = canvas.getContext('2d');
-
-            await page.render({ canvasContext: ctx, viewport }).promise;
-            images.push(canvas.toDataURL('image/jpeg', quality));
+if (dropZoneCompress && fileInputCompress) {
+    dropZoneCompress.addEventListener('click', () => fileInputCompress.click());
+    fileInputCompress.addEventListener('change', (e) => {
+        if (e.target.files[0]) {
+            compressFile = e.target.files[0];
+            const nameEl = document.getElementById('compressFileName');
+            if (nameEl) nameEl.textContent = '📄 ' + compressFile.name;
+            if (compressBtn) compressBtn.disabled = false;
         }
+    });
+}
 
-        const resp = await fetch('/compress', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ images })
-        });
+if (compressBtn) {
+    compressBtn.addEventListener('click', async () => {
+        if (!compressFile) return;
 
-        if (!resp.ok) throw new Error(await resp.text());
+        showLoading(true);
+        showStatus('compressStatus', '⏳ Optimizando y comprimiendo el PDF...');
 
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'comprimido.pdf';
-        a.click();
-        URL.revokeObjectURL(url);
-        showStatus('compressStatus', '✅ Documento optimizado correctamente');
-    } catch (err) {
-        showStatus('compressStatus', '❌ ' + err.message, true);
-    } finally {
-        showLoading(false);
-    }
-});
+        try {
+            const qualityEl = document.getElementById('compressQuality');
+            const quality = qualityEl ? parseFloat(qualityEl.value) : 0.6;
+            const arrayBuffer = await readFileAsArrayBuffer(compressFile);
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            const images = [];
+
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const viewport = page.getViewport({ scale: 1.2 });
+
+                const canvas = document.createElement('canvas');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                const ctx = canvas.getContext('2d');
+
+                await page.render({ canvasContext: ctx, viewport }).promise;
+                images.push(canvas.toDataURL('image/jpeg', quality));
+            }
+
+            const resp = await fetch('/compress', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ images })
+            });
+
+            if (!resp.ok) throw new Error(await resp.text());
+
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'comprimido.pdf';
+            a.click();
+            URL.revokeObjectURL(url);
+            showStatus('compressStatus', '✅ Documento optimizado correctamente');
+        } catch (err) {
+            showStatus('compressStatus', '❌ ' + err.message, true);
+        } finally {
+            showLoading(false);
+        }
+    });
+}

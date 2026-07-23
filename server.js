@@ -15,7 +15,7 @@ app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 app.use(express.static('public'));
 
 // ============================================================
-// ENDPOINT: MERGE (UNIR PDFs) - CORREGIDO
+// ENDPOINT: MERGE (UNIR PDFs) - SOLUCIÓN PÁGINAS EN BLANCO
 // ============================================================
 app.post('/merge', upload.array('pdfs'), async (req, res) => {
     try {
@@ -23,32 +23,31 @@ app.post('/merge', upload.array('pdfs'), async (req, res) => {
             return res.status(400).send('No se han subido archivos PDF.');
         }
 
-        // Crear un documento PDF vacío
         const mergedPdf = await PDFDocument.create();
 
         for (const file of req.files) {
             try {
-                // ⚠️ CLAVE DEL ARREGLO: 
-                // ignoreEncryption: ignora protecciones/firmas bancarias SEPA
-                // throwOnInvalidObject: omite pequeños errores de estructura interna
+                // ignoreEncryption & throwOnInvalidObject omiten bloqueos de PDFs bancarios
                 const pdfToMerge = await PDFDocument.load(file.buffer, {
                     ignoreEncryption: true,
                     throwOnInvalidObject: false
                 });
 
-                // Copiar todas las páginas al PDF final
                 const pageIndices = pdfToMerge.getPageIndices();
                 const copiedPages = await mergedPdf.copyPages(pdfToMerge, pageIndices);
-                copiedPages.forEach((page) => mergedPdf.addPage(page));
+                
+                copiedPages.forEach((page) => {
+                    mergedPdf.addPage(page);
+                });
 
             } catch (fileErr) {
-                console.error(`Error al procesar el archivo ${file.originalname}:`, fileErr);
-                throw new Error(`El archivo "${file.originalname}" no se pudo procesar. Asegúrate de que no esté corrupto.`);
+                console.error(`Error procesando ${file.originalname}:`, fileErr);
+                return res.status(500).send(`Error en el archivo "${file.originalname}": ${fileErr.message}`);
             }
         }
 
-        // Guardar y enviar el PDF combinado
-        const pdfBytes = await mergedPdf.save();
+        // useObjectStreams: false asegura la compatibilidad de fuentes vectoriales
+        const pdfBytes = await mergedPdf.save({ useObjectStreams: false });
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', 'attachment; filename="merged.pdf"');
         return res.send(Buffer.from(pdfBytes));
@@ -74,7 +73,7 @@ app.post('/split', upload.single('file'), async (req, res) => {
         const copiedPages = await newPdf.copyPages(pdfDoc, pageIndexes);
         copiedPages.forEach((page) => newPdf.addPage(page));
 
-        const pdfBytes = await newPdf.save();
+        const pdfBytes = await newPdf.save({ useObjectStreams: false });
         res.setHeader('Content-Type', 'application/pdf');
         return res.send(Buffer.from(pdfBytes));
     } catch (err) {
@@ -100,7 +99,7 @@ app.post('/delete-pages', upload.single('file'), async (req, res) => {
         const copiedPages = await newPdf.copyPages(pdfDoc, keepIndexes);
         copiedPages.forEach((page) => newPdf.addPage(page));
 
-        const pdfBytes = await newPdf.save();
+        const pdfBytes = await newPdf.save({ useObjectStreams: false });
         res.setHeader('Content-Type', 'application/pdf');
         return res.send(Buffer.from(pdfBytes));
     } catch (err) {
@@ -124,7 +123,7 @@ app.post('/extract-pages', upload.single('file'), async (req, res) => {
         const copiedPages = await newPdf.copyPages(pdfDoc, keepIndexes);
         copiedPages.forEach((page) => newPdf.addPage(page));
 
-        const pdfBytes = await newPdf.save();
+        const pdfBytes = await newPdf.save({ useObjectStreams: false });
         res.setHeader('Content-Type', 'application/pdf');
         return res.send(Buffer.from(pdfBytes));
     } catch (err) {
@@ -139,7 +138,7 @@ app.post('/reorder-pages', upload.single('file'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).send('No se ha subido ningún archivo.');
 
-        const newOrder = JSON.parse(req.body.newOrder); // Array con 1-based index: [3, 1, 2]
+        const newOrder = JSON.parse(req.body.newOrder); // Ej: [3, 1, 2]
         const pdfDoc = await PDFDocument.load(req.file.buffer, { ignoreEncryption: true, throwOnInvalidObject: false });
 
         const zeroBasedIndexes = newOrder.map(num => num - 1);
@@ -148,7 +147,7 @@ app.post('/reorder-pages', upload.single('file'), async (req, res) => {
         const copiedPages = await newPdf.copyPages(pdfDoc, zeroBasedIndexes);
         copiedPages.forEach((page) => newPdf.addPage(page));
 
-        const pdfBytes = await newPdf.save();
+        const pdfBytes = await newPdf.save({ useObjectStreams: false });
         res.setHeader('Content-Type', 'application/pdf');
         return res.send(Buffer.from(pdfBytes));
     } catch (err) {
@@ -157,7 +156,7 @@ app.post('/reorder-pages', upload.single('file'), async (req, res) => {
 });
 
 // ============================================================
-// ENDPOINT: COMPRESS (COMPRIMIR DESDE IMÁGENES CLIENTE)
+// ENDPOINT: COMPRESS (RECONSTRUCCIÓN DESDE CANVAS CLIENTE)
 // ============================================================
 app.post('/compress', async (req, res) => {
     try {
@@ -190,9 +189,7 @@ app.post('/compress', async (req, res) => {
     }
 });
 
-// ============================================================
-// FUNCIÓN AUXILIAR: PARSEAR RANGOS (ej. "1,3,5-8")
-// ============================================================
+// Función auxiliar para rangos de páginas ("1,3,5-8")
 function parseRanges(rangeStr, maxPages) {
     const indexes = [];
     if (!rangeStr) return indexes;

@@ -166,7 +166,7 @@ const fileCountMerge = document.getElementById('fileCountMerge');
 const clearMerge = document.getElementById('clearMerge');
 const mergeBtn = document.getElementById('mergeBtn');
 
-new Sortable(fileListMerge, {
+let mergeSortable = new Sortable(fileListMerge, {
     animation: 150,
     ghostClass: 'sortable-ghost',
     onEnd: function(evt) {
@@ -514,7 +514,7 @@ extractBtn.addEventListener('click', async () => {
 });
 
 // ============================================================
-// REORDER (ordenar páginas)
+// REORDER (ordenar páginas en cuadrícula de miniaturas)
 // ============================================================
 let reorderFile = null;
 let pageOrder = [];
@@ -529,12 +529,11 @@ async function loadReorderPages(file) {
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         const totalPages = pdf.numPages;
         pageOrder = Array.from({ length: totalPages }, (_, i) => i + 1);
-        
         pageList.innerHTML = '';
 
         for (let i = 1; i <= totalPages; i++) {
             const div = document.createElement('div');
-            div.className = 'page-item';
+            div.className = 'reorder-item';
             div.dataset.page = i;
 
             const canvas = document.createElement('canvas');
@@ -567,12 +566,11 @@ async function loadReorderPages(file) {
             pageList.appendChild(div);
         }
 
-        // Habilitar arrastrar y soltar
         new Sortable(pageList, {
             animation: 150,
             ghostClass: 'sortable-ghost',
             onEnd: function() {
-                const items = pageList.querySelectorAll('.page-item');
+                const items = pageList.querySelectorAll('.reorder-item');
                 pageOrder = Array.from(items).map(item => parseInt(item.dataset.page));
             }
         });
@@ -633,7 +631,7 @@ reorderBtn.addEventListener('click', async () => {
 });
 
 // ============================================================
-// COMPRESS (comprimir PDF - Procesado en Cliente)
+// COMPRESS (comprimir PDF en cliente)
 // ============================================================
 let compressFile = null;
 const dropZoneCompress = document.getElementById('dropZoneCompress');
@@ -667,7 +665,7 @@ compressBtn.addEventListener('click', async () => {
 
     compressBtn.disabled = true;
     showLoading(true);
-    showStatus('compressStatus', '⏳ Renderizando y optimizando páginas...');
+    showStatus('compressStatus', '⏳ Procesando optimización...');
 
     try {
         const arrayBuffer = await readFileAsArrayBuffer(compressFile);
@@ -676,21 +674,10 @@ compressBtn.addEventListener('click', async () => {
 
         let maxDimension, quality;
         switch (level) {
-            case 'extreme':
-                maxDimension = 800;
-                quality = 0.5;
-                break;
-            case 'recommended':
-                maxDimension = 1200;
-                quality = 0.7;
-                break;
-            case 'low':
-                maxDimension = 1800;
-                quality = 0.85;
-                break;
-            default:
-                maxDimension = 1200;
-                quality = 0.7;
+            case 'extreme': maxDimension = 800; quality = 0.5; break;
+            case 'recommended': maxDimension = 1200; quality = 0.7; break;
+            case 'low': maxDimension = 1800; quality = 0.85; break;
+            default: maxDimension = 1200; quality = 0.7;
         }
 
         const images = [];
@@ -721,7 +708,7 @@ compressBtn.addEventListener('click', async () => {
             images.push(dataUrl);
         }
 
-        showStatus('compressStatus', '⏳ Generando archivo final...');
+        showStatus('compressStatus', '⏳ Generando documento comprimido...');
 
         const resp = await fetch('/compress', {
             method: 'POST',

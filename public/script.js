@@ -1,469 +1,626 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // 1. Configuración segura de PDF.js Worker
-    if (typeof pdfjsLib !== 'undefined') {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-    }
+// ============================================================
+// CONFIGURACIÓN
+// ============================================================
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-    // Helpers UI
-    function showLoading(show) {
-        const overlay = document.getElementById('loadingOverlay');
-        if (overlay) overlay.style.display = show ? 'flex' : 'none';
-    }
+// ============================================================
+// FUNCIONES AUXILIARES GLOBALES
+// ============================================================
+function readFileAsArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = (e) => reject(e.target.error);
+        reader.readAsArrayBuffer(file);
+    });
+}
 
-    function showStatus(elementId, text, isError = false) {
-        const el = document.getElementById(elementId);
-        if (!el) return;
-        el.textContent = text;
-        el.className = 'status-msg ' + (isError ? 'error' : 'success');
-    }
+function showLoading(show) {
+    document.getElementById('loading').style.display = show ? 'block' : 'none';
+}
 
-    function readFileAsArrayBuffer(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsArrayBuffer(file);
-        });
+function showStatus(elementId, message, isError = false) {
+    const el = document.getElementById(elementId);
+    if (el) {
+        el.textContent = message;
+        el.style.color = isError ? '#d32f2f' : '#1d1d1f';
     }
+}
 
-    // ============================================================
-    // NAVEGACIÓN POR PESTAÑAS (Garantizado)
-    // ============================================================
-    const tabButtons = document.querySelectorAll('.tab-btn');
-    tabButtons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            tabButtons.forEach(b => b.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            
-            btn.classList.add('active');
-            const targetId = btn.getAttribute('data-tab');
-            const targetTab = document.getElementById(targetId);
-            if (targetTab) targetTab.classList.add('active');
+// Descarga un blob en el navegador de forma limpia
+function downloadFile(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Armoniza y centraliza todos los "Drag & Drop" del proyecto
+function setupDropZone(zoneId, inputId, onFilesSelected) {
+    const dropZone = document.getElementById(zoneId);
+    const fileInput = document.getElementById(inputId);
+    if (!dropZone || !fileInput) return;
+
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            fileInput.files = e.dataTransfer.files;
+            onFilesSelected(e.dataTransfer.files);
+        }
+    });
+    dropZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', e => {
+        if (e.target.files && e.target.files.length > 0) {
+            onFilesSelected(e.target.files);
+        }
+    });
+}
+
+// ============================================================
+// MANEJO DE TABS
+// ============================================================
+const tabs = document.querySelectorAll('.tab');
+const panels = {
+    merge: document.getElementById('mergePanel'),
+    split: document.getElementById('splitPanel'),
+    delete: document.getElementById('deletePanel'),
+    extract: document.getElementById('extractPanel'),
+    reorder: document.getElementById('reorderPanel'),
+    compress: document.getElementById('compressPanel')
+};
+
+tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const target = tab.dataset.tab;
+        Object.keys(panels).forEach(key => {
+            panels[key].classList.toggle('active', key === target);
         });
     });
+});
 
-    // ============================================================
-    // 1. MERGE (UNIR)
-    // ============================================================
-    let mergeFiles = [];
-    const dropZoneMerge = document.getElementById('dropZoneMerge');
-    const fileInputMerge = document.getElementById('fileInputMerge');
-    const mergeFileList = document.getElementById('mergeFileList');
-    const mergeBtn = document.getElementById('mergeBtn');
-
-    if (dropZoneMerge && fileInputMerge) {
-        dropZoneMerge.addEventListener('click', () => fileInputMerge.click());
-        fileInputMerge.addEventListener('change', (e) => handleMergeFiles(e.target.files));
-
-        dropZoneMerge.addEventListener('dragover', (e) => { e.preventDefault(); dropZoneMerge.classList.add('dragover'); });
-        dropZoneMerge.addEventListener('dragleave', () => dropZoneMerge.classList.remove('dragover'));
-        dropZoneMerge.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZoneMerge.classList.remove('dragover');
-            handleMergeFiles(e.dataTransfer.files);
-        });
+// ============================================================
+// RENDERIZADO VISUAL DE PDFs
+// ============================================================
+async function renderThumbnail(file, canvas, pageNum = 1) {
+    try {
+        const arrayBuffer = await readFileAsArrayBuffer(file);
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const page = await pdf.getPage(pageNum);
+        const scale = 0.5;
+        const viewport = page.getViewport({ scale });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        await page.render({ canvasContext: ctx, viewport }).promise;
+    } catch (_) {
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#f0f0f2';
+        ctx.fillRect(0, 0, canvas.width || 50, canvas.height || 70);
+        ctx.fillStyle = '#86868b';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Sin vista', (canvas.width || 50) / 2, (canvas.height || 70) / 2);
     }
+}
 
-    function handleMergeFiles(files) {
-        for (const file of files) {
-            if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-                mergeFiles.push(file);
-            }
+async function renderPageGrid(file, gridId, selectionsArray) {
+    const grid = document.getElementById(gridId);
+    if (!grid) return;
+    grid.innerHTML = '';
+    try {
+        const arrayBuffer = await readFileAsArrayBuffer(file);
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const totalPages = pdf.numPages;
+
+        if (selectionsArray.length !== totalPages) {
+            selectionsArray.length = 0;
+            for (let i = 0; i < totalPages; i++) selectionsArray.push(false);
         }
-        renderMergeList();
-    }
 
-    function renderMergeList() {
-        if (!mergeFileList) return;
-        mergeFileList.innerHTML = '';
-        mergeFiles.forEach((file, index) => {
-            const item = document.createElement('div');
-            item.className = 'file-item';
-            item.innerHTML = `
-                <span>📄 ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)</span>
-                <button type="button" class="btn-remove" data-index="${index}">✕</button>
-            `;
-            mergeFileList.appendChild(item);
-        });
+        for (let i = 0; i < totalPages; i++) {
+            const pageNum = i + 1;
+            const div = document.createElement('div');
+            div.className = 'page-item';
+            div.dataset.index = i;
 
-        // Event delegation para botones de eliminar
-        mergeFileList.querySelectorAll('.btn-remove').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const idx = parseInt(e.target.getAttribute('data-index'), 10);
-                mergeFiles.splice(idx, 1);
-                renderMergeList();
+            const canvas = document.createElement('canvas');
+            div.appendChild(canvas);
+
+            const overlay = document.createElement('div');
+            overlay.className = 'check-overlay';
+            overlay.textContent = '✓';
+            div.appendChild(overlay);
+
+            const label = document.createElement('div');
+            label.className = 'page-number';
+            label.textContent = `Pág. ${pageNum}`;
+            div.appendChild(label);
+
+            const updateStyle = () => div.classList.toggle('selected', selectionsArray[i]);
+
+            div.addEventListener('click', () => {
+                selectionsArray[i] = !selectionsArray[i];
+                updateStyle();
             });
-        });
 
-        if (mergeBtn) mergeBtn.disabled = mergeFiles.length < 2;
-    }
-
-    if (mergeBtn) {
-        mergeBtn.addEventListener('click', async () => {
-            if (mergeFiles.length < 2) return;
-            mergeBtn.disabled = true;
-            showLoading(true);
-            showStatus('mergeStatus', '⏳ Uniendo archivos...');
+            grid.appendChild(div);
+            updateStyle();
 
             try {
-                const formData = new FormData();
-                mergeFiles.forEach(file => formData.append('pdfs', file));
-
-                const resp = await fetch('/merge', { method: 'POST', body: formData });
-                if (!resp.ok) throw new Error(await resp.text());
-
-                const blob = await resp.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'merged.pdf';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-
-                showStatus('mergeStatus', '✅ Unificado correctamente');
-            } catch (err) {
-                showStatus('mergeStatus', '❌ ' + err.message, true);
-            } finally {
-                mergeBtn.disabled = false;
-                showLoading(false);
+                const page = await pdf.getPage(pageNum);
+                const scale = 0.3;
+                const viewport = page.getViewport({ scale });
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                const ctx = canvas.getContext('2d');
+                await page.render({ canvasContext: ctx, viewport }).promise;
+            } catch (_) {
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#f0f0f2';
+                ctx.fillRect(0, 0, canvas.width || 120, canvas.height || 160);
+                ctx.fillStyle = '#86868b';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('Pág. ' + pageNum, (canvas.width || 120) / 2, (canvas.height || 160) / 2);
             }
-        });
-    }
-
-    // ============================================================
-    // 2. SPLIT (DIVIDIR)
-    // ============================================================
-    let splitFile = null;
-    const dropZoneSplit = document.getElementById('dropZoneSplit');
-    const fileInputSplit = document.getElementById('fileInputSplit');
-    const splitBtn = document.getElementById('splitBtn');
-
-    if (dropZoneSplit && fileInputSplit) {
-        dropZoneSplit.addEventListener('click', () => fileInputSplit.click());
-        fileInputSplit.addEventListener('change', (e) => {
-            if (e.target.files[0]) {
-                splitFile = e.target.files[0];
-                const nameEl = document.getElementById('splitFileName');
-                if (nameEl) nameEl.textContent = '📄 ' + splitFile.name;
-                if (splitBtn) splitBtn.disabled = false;
-            }
-        });
-    }
-
-    if (splitBtn) {
-        splitBtn.addEventListener('click', async () => {
-            const rangesEl = document.getElementById('splitRanges');
-            const ranges = rangesEl ? rangesEl.value.trim() : '';
-            if (!splitFile || !ranges) return;
-
-            showLoading(true);
-            try {
-                const formData = new FormData();
-                formData.append('file', splitFile);
-                formData.append('ranges', ranges);
-
-                const resp = await fetch('/split', { method: 'POST', body: formData });
-                if (!resp.ok) throw new Error(await resp.text());
-
-                const blob = await resp.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'split.pdf';
-                a.click();
-                URL.revokeObjectURL(url);
-                showStatus('splitStatus', '✅ PDF dividido con éxito');
-            } catch (err) {
-                showStatus('splitStatus', '❌ ' + err.message, true);
-            } finally {
-                showLoading(false);
-            }
-        });
-    }
-
-    // ============================================================
-    // 3. DELETE PAGES (ELIMINAR PÁGINAS)
-    // ============================================================
-    let deleteFile = null;
-    const dropZoneDelete = document.getElementById('dropZoneDelete');
-    const fileInputDelete = document.getElementById('fileInputDelete');
-    const deleteBtn = document.getElementById('deleteBtn');
-
-    if (dropZoneDelete && fileInputDelete) {
-        dropZoneDelete.addEventListener('click', () => fileInputDelete.click());
-        fileInputDelete.addEventListener('change', (e) => {
-            if (e.target.files[0]) {
-                deleteFile = e.target.files[0];
-                const nameEl = document.getElementById('deleteFileName');
-                if (nameEl) nameEl.textContent = '📄 ' + deleteFile.name;
-                if (deleteBtn) deleteBtn.disabled = false;
-            }
-        });
-    }
-
-    if (deleteBtn) {
-        deleteBtn.addEventListener('click', async () => {
-            const rangesEl = document.getElementById('deleteRanges');
-            const pagesToDelete = rangesEl ? rangesEl.value.trim() : '';
-            if (!deleteFile || !pagesToDelete) return;
-
-            showLoading(true);
-            try {
-                const formData = new FormData();
-                formData.append('file', deleteFile);
-                formData.append('pagesToDelete', pagesToDelete);
-
-                const resp = await fetch('/delete-pages', { method: 'POST', body: formData });
-                if (!resp.ok) throw new Error(await resp.text());
-
-                const blob = await resp.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'modificado.pdf';
-                a.click();
-                URL.revokeObjectURL(url);
-                showStatus('deleteStatus', '✅ Páginas eliminadas con éxito');
-            } catch (err) {
-                showStatus('deleteStatus', '❌ ' + err.message, true);
-            } finally {
-                showLoading(false);
-            }
-        });
-    }
-
-    // ============================================================
-    // 4. EXTRACT PAGES (EXTRAER PÁGINAS)
-    // ============================================================
-    let extractFile = null;
-    const dropZoneExtract = document.getElementById('dropZoneExtract');
-    const fileInputExtract = document.getElementById('fileInputExtract');
-    const extractBtn = document.getElementById('extractBtn');
-
-    if (dropZoneExtract && fileInputExtract) {
-        dropZoneExtract.addEventListener('click', () => fileInputExtract.click());
-        fileInputExtract.addEventListener('change', (e) => {
-            if (e.target.files[0]) {
-                extractFile = e.target.files[0];
-                const nameEl = document.getElementById('extractFileName');
-                if (nameEl) nameEl.textContent = '📄 ' + extractFile.name;
-                if (extractBtn) extractBtn.disabled = false;
-            }
-        });
-    }
-
-    if (extractBtn) {
-        extractBtn.addEventListener('click', async () => {
-            const rangesEl = document.getElementById('extractRanges');
-            const pagesToExtract = rangesEl ? rangesEl.value.trim() : '';
-            if (!extractFile || !pagesToExtract) return;
-
-            showLoading(true);
-            try {
-                const formData = new FormData();
-                formData.append('file', extractFile);
-                formData.append('pagesToExtract', pagesToExtract);
-
-                const resp = await fetch('/extract-pages', { method: 'POST', body: formData });
-                if (!resp.ok) throw new Error(await resp.text());
-
-                const blob = await resp.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'extraido.pdf';
-                a.click();
-                URL.revokeObjectURL(url);
-                showStatus('extractStatus', '✅ Páginas extraídas con éxito');
-            } catch (err) {
-                showStatus('extractStatus', '❌ ' + err.message, true);
-            } finally {
-                showLoading(false);
-            }
-        });
-    }
-
-    // ============================================================
-    // 5. REORDER (REORDENAR PÁGINAS)
-    // ============================================================
-    let reorderFile = null;
-    let pageOrder = [];
-    const dropZoneReorder = document.getElementById('dropZoneReorder');
-    const fileInputReorder = document.getElementById('fileInputReorder');
-    const reorderBtn = document.getElementById('reorderBtn');
-    const pageList = document.getElementById('pageList');
-
-    if (dropZoneReorder && fileInputReorder) {
-        dropZoneReorder.addEventListener('click', () => fileInputReorder.click());
-        fileInputReorder.addEventListener('change', async (e) => {
-            if (e.target.files[0]) {
-                reorderFile = e.target.files[0];
-                const nameEl = document.getElementById('reorderFileName');
-                if (nameEl) nameEl.textContent = '📄 ' + reorderFile.name;
-                showLoading(true);
-                await loadReorderPages(reorderFile);
-                showLoading(false);
-                if (reorderBtn) reorderBtn.disabled = false;
-            }
-        });
-    }
-
-    async function loadReorderPages(file) {
-        if (!pageList || typeof pdfjsLib === 'undefined') return;
-        try {
-            const arrayBuffer = await readFileAsArrayBuffer(file);
-            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-            const totalPages = pdf.numPages;
-            pageOrder = Array.from({ length: totalPages }, (_, i) => i + 1);
-            pageList.innerHTML = '';
-
-            for (let i = 1; i <= totalPages; i++) {
-                const li = document.createElement('li');
-                li.className = 'reorder-item';
-                li.dataset.page = i;
-
-                const canvas = document.createElement('canvas');
-                canvas.style.pointerEvents = 'none';
-                li.appendChild(canvas);
-
-                const label = document.createElement('div');
-                label.className = 'page-number';
-                label.textContent = `Pág. ${i}`;
-                li.appendChild(label);
-
-                try {
-                    const page = await pdf.getPage(i);
-                    const scale = 0.3;
-                    const viewport = page.getViewport({ scale });
-                    canvas.width = viewport.width;
-                    canvas.height = viewport.height;
-                    const ctx = canvas.getContext('2d');
-                    await page.render({ canvasContext: ctx, viewport }).promise;
-                } catch (_) {
-                    const ctx = canvas.getContext('2d');
-                    ctx.fillStyle = '#f0f0f2';
-                    ctx.fillRect(0, 0, canvas.width || 120, canvas.height || 160);
-                }
-
-                pageList.appendChild(li);
-            }
-
-            if (typeof Sortable !== 'undefined') {
-                new Sortable(pageList, {
-                    animation: 150,
-                    ghostClass: 'sortable-ghost',
-                    draggable: '.reorder-item',
-                    onEnd: function() {
-                        const items = pageList.querySelectorAll('.reorder-item');
-                        pageOrder = Array.from(items).map(item => parseInt(item.dataset.page, 10));
-                    }
-                });
-            }
-        } catch (err) {
-            alert('Error al cargar la vista previa: ' + err.message);
         }
+
+        const previewId = gridId.replace('PageGrid', 'Preview');
+        const previewEl = document.getElementById(previewId);
+        if (previewEl) previewEl.style.display = 'block';
+
+    } catch (err) {
+        alert('Error al cargar las páginas: ' + err.message);
     }
+}
 
-    if (reorderBtn) {
-        reorderBtn.addEventListener('click', async () => {
-            if (!reorderFile || pageOrder.length === 0) return;
+// ============================================================
+// MERGE (UNIR)
+// ============================================================
+let mergeFiles = [];
+const fileListMerge = document.getElementById('fileListMerge');
+const fileCountMerge = document.getElementById('fileCountMerge');
+const mergeBtn = document.getElementById('mergeBtn');
 
-            showLoading(true);
-            try {
-                const formData = new FormData();
-                formData.append('file', reorderFile);
-                formData.append('newOrder', JSON.stringify(pageOrder));
-
-                const resp = await fetch('/reorder-pages', { method: 'POST', body: formData });
-                if (!resp.ok) throw new Error(await resp.text());
-
-                const blob = await resp.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'reordenado.pdf';
-                a.click();
-                URL.revokeObjectURL(url);
-                showStatus('reorderStatus', '✅ Páginas reordenadas con éxito');
-            } catch (err) {
-                showStatus('reorderStatus', '❌ ' + err.message, true);
-            } finally {
-                showLoading(false);
-            }
-        });
-    }
-
-    // ============================================================
-    // 6. COMPRESS (COMPRIMIR)
-    // ============================================================
-    let compressFile = null;
-    const dropZoneCompress = document.getElementById('dropZoneCompress');
-    const fileInputCompress = document.getElementById('fileInputCompress');
-    const compressBtn = document.getElementById('compressBtn');
-
-    if (dropZoneCompress && fileInputCompress) {
-        dropZoneCompress.addEventListener('click', () => fileInputCompress.click());
-        fileInputCompress.addEventListener('change', (e) => {
-            if (e.target.files[0]) {
-                compressFile = e.target.files[0];
-                const nameEl = document.getElementById('compressFileName');
-                if (nameEl) nameEl.textContent = '📄 ' + compressFile.name;
-                if (compressBtn) compressBtn.disabled = false;
-            }
-        });
-    }
-
-    if (compressBtn) {
-        compressBtn.addEventListener('click', async () => {
-            if (!compressFile || typeof pdfjsLib === 'undefined') return;
-
-            showLoading(true);
-            showStatus('compressStatus', '⏳ Optimizando y comprimiendo el PDF...');
-
-            try {
-                const qualityEl = document.getElementById('compressQuality');
-                const quality = qualityEl ? parseFloat(qualityEl.value) : 0.6;
-                const arrayBuffer = await readFileAsArrayBuffer(compressFile);
-                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                const images = [];
-
-                for (let i = 1; i <= pdf.numPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const viewport = page.getViewport({ scale: 1.2 });
-
-                    const canvas = document.createElement('canvas');
-                    canvas.width = viewport.width;
-                    canvas.height = viewport.height;
-                    const ctx = canvas.getContext('2d');
-
-                    await page.render({ canvasContext: ctx, viewport }).promise;
-                    images.push(canvas.toDataURL('image/jpeg', quality));
-                }
-
-                const resp = await fetch('/compress', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ images })
-                });
-
-                if (!resp.ok) throw new Error(await resp.text());
-
-                const blob = await resp.blob();
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'comprimido.pdf';
-                a.click();
-                URL.revokeObjectURL(url);
-                showStatus('compressStatus', '✅ Documento optimizado correctamente');
-            } catch (err) {
-                showStatus('compressStatus', '❌ ' + err.message, true);
-            } finally {
-                showLoading(false);
-            }
-        });
+new Sortable(fileListMerge, {
+    animation: 150,
+    ghostClass: 'sortable-ghost',
+    onEnd: function(evt) {
+        const [moved] = mergeFiles.splice(evt.oldIndex, 1);
+        mergeFiles.splice(evt.newIndex, 0, moved);
+        updateMergeCount();
     }
 });
+
+function updateMergeCount() {
+    const count = mergeFiles.length;
+    fileCountMerge.textContent = count === 0 ? '0 archivos' : (count === 1 ? '1 archivo' : `${count} archivos`);
+}
+
+function renderMergeList() {
+    fileListMerge.innerHTML = '';
+    mergeFiles.forEach((file, index) => {
+        const li = document.createElement('li');
+        
+        const thumbDiv = document.createElement('div');
+        thumbDiv.className = 'thumbnail';
+        const canvas = document.createElement('canvas');
+        thumbDiv.appendChild(canvas);
+        li.appendChild(thumbDiv);
+        renderThumbnail(file, canvas);
+
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'file-info';
+        const nameSpan = document.createElement('div');
+        nameSpan.className = 'file-name';
+        nameSpan.textContent = file.name;
+        const metaSpan = document.createElement('div');
+        metaSpan.className = 'file-meta';
+        metaSpan.textContent = (file.size / 1024).toFixed(1) + ' KB';
+        
+        infoDiv.appendChild(nameSpan);
+        infoDiv.appendChild(metaSpan);
+        li.appendChild(infoDiv);
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'delete-btn';
+        delBtn.textContent = '×';
+        delBtn.addEventListener('click', () => {
+            mergeFiles.splice(index, 1);
+            renderMergeList();
+        });
+        li.appendChild(delBtn);
+        fileListMerge.appendChild(li);
+    });
+    updateMergeCount();
+}
+
+setupDropZone('dropZoneMerge', 'fileInputMerge', files => {
+    const pdfFiles = Array.from(files).filter(f => f.type === 'application/pdf' || f.name.endsWith('.pdf'));
+    if (pdfFiles.length === 0) { alert('Solo se permiten PDF'); return; }
+    mergeFiles.push(...pdfFiles);
+    renderMergeList();
+});
+
+document.getElementById('clearMerge').addEventListener('click', () => { mergeFiles = []; renderMergeList(); });
+
+mergeBtn.addEventListener('click', async () => {
+    if (mergeFiles.length === 0) { alert('No hay archivos para unir'); return; }
+    mergeBtn.disabled = true;
+    showLoading(true);
+    try {
+        const formData = new FormData();
+        mergeFiles.forEach(f => formData.append('pdfs', f));
+        
+        const resp = await fetch('/merge', { method: 'POST', body: formData });
+        if (!resp.ok) throw new Error(await resp.text());
+        
+        downloadFile(await resp.blob(), 'merged.pdf');
+    } catch (err) {
+        alert('Error: ' + err.message);
+    } finally {
+        mergeBtn.disabled = false;
+        showLoading(false);
+    }
+});
+
+// ============================================================
+// SPLIT (DIVIDIR)
+// ============================================================
+let splitFile = null;
+let splitSelections = [];
+const splitBtn = document.getElementById('splitBtn');
+const splitRangesInput = document.getElementById('splitRanges');
+const splitRangesContainer = document.getElementById('splitRangesContainer');
+
+document.querySelectorAll('input[name="splitMode"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+        splitRangesContainer.style.display = radio.value === 'ranges' ? 'block' : 'none';
+        document.getElementById('splitPreview').style.display = radio.value === 'individual' ? 'block' : 'none';
+    });
+});
+
+setupDropZone('dropZoneSplit', 'fileInputSplit', files => {
+    splitFile = files[0];
+    document.querySelector('#dropZoneSplit p').textContent = `📄 ${splitFile.name}`;
+    renderPageGrid(splitFile, 'splitPageGrid', splitSelections);
+});
+
+document.getElementById('splitSelectAll').addEventListener('click', () => {
+    splitSelections.fill(true);
+    renderPageGrid(splitFile, 'splitPageGrid', splitSelections);
+});
+document.getElementById('splitDeselectAll').addEventListener('click', () => {
+    splitSelections.fill(false);
+    renderPageGrid(splitFile, 'splitPageGrid', splitSelections);
+});
+
+splitBtn.addEventListener('click', async () => {
+    if (!splitFile) { alert('Primero selecciona un PDF'); return; }
+    const mode = document.querySelector('input[name="splitMode"]:checked').value;
+    let pagesToSend = '';
+    
+    if (mode === 'individual') {
+        const selectedIndices = splitSelections.map((sel, idx) => sel ? idx + 1 : null).filter(v => v !== null);
+        if (selectedIndices.length === 0) { alert('Selecciona al menos una página'); return; }
+        pagesToSend = selectedIndices.join(',');
+    } else {
+        pagesToSend = splitRangesInput.value.trim();
+        if (!pagesToSend) { alert('Introduce rangos válidos'); return; }
+    }
+    
+    splitBtn.disabled = true;
+    showLoading(true);
+    try {
+        const formData = new FormData();
+        formData.append('file', splitFile);
+        formData.append('mode', mode);
+        formData.append('ranges', pagesToSend);
+        
+        const resp = await fetch('/split', { method: 'POST', body: formData });
+        if (!resp.ok) throw new Error(await resp.text());
+        
+        downloadFile(await resp.blob(), 'split.pdf');
+        showStatus('splitStatus', '✅ División completada');
+    } catch (err) {
+        showStatus('splitStatus', '❌ ' + err.message, true);
+    } finally {
+        splitBtn.disabled = false;
+        showLoading(false);
+    }
+});
+
+// ============================================================
+// DELETE (ELIMINAR PÁGINAS)
+// ============================================================
+let deleteFile = null;
+let deleteSelections = [];
+const deleteBtn = document.getElementById('deleteBtn');
+const deletePagesInput = document.getElementById('deletePages');
+
+setupDropZone('dropZoneDelete', 'fileInputDelete', files => {
+    deleteFile = files[0];
+    document.querySelector('#dropZoneDelete p').textContent = `📄 ${deleteFile.name}`;
+    renderPageGrid(deleteFile, 'deletePageGrid', deleteSelections);
+});
+
+document.getElementById('deleteSelectAll').addEventListener('click', () => {
+    deleteSelections.fill(true);
+    renderPageGrid(deleteFile, 'deletePageGrid', deleteSelections);
+});
+document.getElementById('deleteDeselectAll').addEventListener('click', () => {
+    deleteSelections.fill(false);
+    renderPageGrid(deleteFile, 'deletePageGrid', deleteSelections);
+});
+
+deleteBtn.addEventListener('click', async () => {
+    if (!deleteFile) { alert('Selecciona un PDF'); return; }
+    let pagesToDelete = deletePagesInput.value.trim();
+    if (!pagesToDelete) {
+        const selected = deleteSelections.map((sel, idx) => sel ? idx + 1 : null).filter(v => v !== null);
+        if (selected.length === 0) { alert('Selecciona al menos una página o escribe rangos'); return; }
+        pagesToDelete = selected.join(',');
+    }
+    
+    deleteBtn.disabled = true;
+    showLoading(true);
+    try {
+        const formData = new FormData();
+        formData.append('file', deleteFile);
+        formData.append('pagesToDelete', pagesToDelete);
+        
+        const resp = await fetch('/delete-pages', { method: 'POST', body: formData });
+        if (!resp.ok) throw new Error(await resp.text());
+        
+        downloadFile(await resp.blob(), 'modified.pdf');
+        showStatus('deleteStatus', '✅ Páginas eliminadas correctamente');
+    } catch (err) {
+        showStatus('deleteStatus', '❌ ' + err.message, true);
+    } finally {
+        deleteBtn.disabled = false;
+        showLoading(false);
+    }
+});
+
+// ============================================================
+// EXTRACT (EXTRAER PÁGINAS)
+// ============================================================
+let extractFile = null;
+let extractSelections = [];
+const extractBtn = document.getElementById('extractBtn');
+const extractPagesInput = document.getElementById('extractPages');
+
+setupDropZone('dropZoneExtract', 'fileInputExtract', files => {
+    extractFile = files[0];
+    document.querySelector('#dropZoneExtract p').textContent = `📄 ${extractFile.name}`;
+    renderPageGrid(extractFile, 'extractPageGrid', extractSelections);
+});
+
+document.getElementById('extractSelectAll').addEventListener('click', () => {
+    extractSelections.fill(true);
+    renderPageGrid(extractFile, 'extractPageGrid', extractSelections);
+});
+document.getElementById('extractDeselectAll').addEventListener('click', () => {
+    extractSelections.fill(false);
+    renderPageGrid(extractFile, 'extractPageGrid', extractSelections);
+});
+
+extractBtn.addEventListener('click', async () => {
+    if (!extractFile) { alert('Selecciona un PDF'); return; }
+    let pagesToExtract = extractPagesInput.value.trim();
+    if (!pagesToExtract) {
+        const selected = extractSelections.map((sel, idx) => sel ? idx + 1 : null).filter(v => v !== null);
+        if (selected.length === 0) { alert('Selecciona al menos una página o escribe rangos'); return; }
+        pagesToExtract = selected.join(',');
+    }
+    
+    extractBtn.disabled = true;
+    showLoading(true);
+    try {
+        const formData = new FormData();
+        formData.append('file', extractFile);
+        formData.append('pagesToExtract', pagesToExtract);
+        
+        const resp = await fetch('/extract-pages', { method: 'POST', body: formData });
+        if (!resp.ok) throw new Error(await resp.text());
+        
+        downloadFile(await resp.blob(), 'extracted.pdf');
+        showStatus('extractStatus', '✅ Páginas extraídas correctamente');
+    } catch (err) {
+        showStatus('extractStatus', '❌ ' + err.message, true);
+    } finally {
+        extractBtn.disabled = false;
+        showLoading(false);
+    }
+});
+
+// ============================================================
+// REORDER (ORDENAR PÁGINAS)
+// ============================================================
+let reorderFile = null;
+let pageOrder = [];
+const reorderBtn = document.getElementById('reorderBtn');
+const pageList = document.getElementById('pageList');
+
+// Instanciar Sortable UNA sola vez de manera global
+new Sortable(pageList, {
+    animation: 150,
+    ghostClass: 'sortable-ghost',
+    draggable: '.reorder-item',
+    onEnd: function() {
+        const items = pageList.querySelectorAll('.reorder-item');
+        pageOrder = Array.from(items).map(item => parseInt(item.dataset.page));
+    }
+});
+
+async function loadReorderPages(file) {
+    try {
+        const arrayBuffer = await readFileAsArrayBuffer(file);
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const totalPages = pdf.numPages;
+        pageOrder = Array.from({ length: totalPages }, (_, i) => i + 1);
+        pageList.innerHTML = '';
+
+        for (let i = 1; i <= totalPages; i++) {
+            const li = document.createElement('li');
+            li.className = 'reorder-item';
+            li.dataset.page = i;
+
+            const canvas = document.createElement('canvas');
+            canvas.style.pointerEvents = 'none';
+            li.appendChild(canvas);
+
+            const label = document.createElement('div');
+            label.className = 'page-number';
+            label.textContent = `Pág. ${i}`;
+            li.appendChild(label);
+
+            pageList.appendChild(li);
+
+            try {
+                const page = await pdf.getPage(i);
+                const scale = 0.3;
+                const viewport = page.getViewport({ scale });
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                const ctx = canvas.getContext('2d');
+                await page.render({ canvasContext: ctx, viewport }).promise;
+            } catch (_) {
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#f0f0f2';
+                ctx.fillRect(0, 0, canvas.width || 120, canvas.height || 160);
+                ctx.fillStyle = '#86868b';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('Pág. ' + i, (canvas.width || 120) / 2, (canvas.height || 160) / 2);
+            }
+        }
+    } catch (err) {
+        alert('Error al cargar las páginas: ' + err.message);
+    }
+}
+
+setupDropZone('dropZoneReorder', 'fileInputReorder', files => {
+    reorderFile = files[0];
+    document.querySelector('#dropZoneReorder p').textContent = `📄 ${reorderFile.name}`;
+    loadReorderPages(reorderFile);
+});
+
+reorderBtn.addEventListener('click', async () => {
+    if (!reorderFile) { alert('Selecciona un PDF'); return; }
+    if (pageOrder.length === 0) { alert('No hay páginas para ordenar'); return; }
+    
+    reorderBtn.disabled = true;
+    showLoading(true);
+    try {
+        const formData = new FormData();
+        formData.append('file', reorderFile);
+        formData.append('newOrder', JSON.stringify(pageOrder));
+        
+        const resp = await fetch('/reorder-pages', { method: 'POST', body: formData });
+        if (!resp.ok) throw new Error(await resp.text());
+        
+        downloadFile(await resp.blob(), 'reordered.pdf');
+        showStatus('reorderStatus', '✅ Nuevo orden aplicado');
+    } catch (err) {
+        showStatus('reorderStatus', '❌ ' + err.message, true);
+    } finally {
+        reorderBtn.disabled = false;
+        showLoading(false);
+    }
+});
+
+// ============================================================
+// COMPRESS (COMPRIMIR PDF)
+// ============================================================
+let compressFile = null;
+const compressBtn = document.getElementById('compressBtn');
+
+setupDropZone('dropZoneCompress', 'fileInputCompress', files => {
+    compressFile = files[0];
+    document.querySelector('#dropZoneCompress p').textContent = `📄 ${compressFile.name}`;
+});
+
+compressBtn.addEventListener('click', async () => {
+    if (!compressFile) { alert('Selecciona un PDF para comprimir'); return; }
+
+    const level = document.querySelector('input[name="compressLevel"]:checked').value;
+    compressBtn.disabled = true;
+    showLoading(true);
+    showStatus('compressStatus', '⏳ Procesando optimización...');
+
+    try {
+        const arrayBuffer = await readFileAsArrayBuffer(compressFile);
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const totalPages = pdf.numPages;
+
+        let maxDimension, quality;
+        switch (level) {
+            case 'extreme': maxDimension = 800; quality = 0.5; break;
+            case 'recommended': maxDimension = 1200; quality = 0.7; break;
+            case 'low': maxDimension = 1800; quality = 0.85; break;
+            default: maxDimension = 1200; quality = 0.7;
+        }
+
+        const images = [];
+
+        for (let i = 1; i <= totalPages; i++) {
+            showStatus('compressStatus', `⏳ Procesando página ${i} de ${totalPages}...`);
+            const page = await pdf.getPage(i);
+            const unscaledViewport = page.getViewport({ scale: 1.0 });
+
+            const currentMax = Math.max(unscaledViewport.width, unscaledViewport.height);
+            let scale = 1.0;
+            if (currentMax > maxDimension) scale = maxDimension / currentMax;
+
+            const viewport = page.getViewport({ scale });
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.floor(viewport.width);
+            canvas.height = Math.floor(viewport.height);
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            await page.render({ canvasContext: ctx, viewport }).promise;
+
+            images.push(canvas.toDataURL('image/jpeg', quality));
+        }
+
+        showStatus('compressStatus', '⏳ Generando documento comprimido...');
+
+        const resp = await fetch('/compress', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ images, level })
+        });
+
+        if (!resp.ok) throw new Error(await resp.text());
+
+        downloadFile(await resp.blob(), `compressed_${level}.pdf`);
+        showStatus('compressStatus', '✅ PDF comprimido correctamente');
+    } catch (err) {
+        showStatus('compressStatus', '❌ ' + err.message, true);
+    } finally {
+        compressBtn.disabled = false;
+        showLoading(false);
+    }
+});
+
+// ============================================================
+// INICIALIZACIÓN
+// ============================================================
+updateMergeCount();
+console.log('📄 Suite PDF cargada correctamente');

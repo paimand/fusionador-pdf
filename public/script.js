@@ -531,14 +531,30 @@ async function loadReorderPages(file) {
         pageOrder = Array.from({ length: totalPages }, (_, i) => i + 1);
         
         pageList.innerHTML = '';
-        pageList.className = 'page-grid-reorder'; // Clase encargada de la distribución en cuadrícula/columnas
+        // Forzar contenedor tipo cuadrícula/flexbox para mostrar en columnas
+        pageList.style.display = 'flex';
+        pageList.style.flexWrap = 'wrap';
+        pageList.style.gap = '15px';
+        pageList.style.marginTop = '20px';
+        pageList.style.padding = '0';
+        pageList.style.listStyle = 'none';
 
         for (let i = 1; i <= totalPages; i++) {
             const div = document.createElement('div');
-            div.className = 'page-item reorder-item';
+            div.className = 'page-item';
             div.dataset.page = i;
 
+            // Dimensiones fijas directas para evitar el tamaño completo
+            div.style.width = '120px';
+            div.style.maxWidth = '120px';
+            div.style.cursor = 'grab';
+            div.style.display = 'flex';
+            div.style.flexDirection = 'column';
+            div.style.alignItems = 'center';
+
             const canvas = document.createElement('canvas');
+            canvas.style.width = '100%';
+            canvas.style.height = 'auto';
             div.appendChild(canvas);
 
             const label = document.createElement('div');
@@ -568,12 +584,12 @@ async function loadReorderPages(file) {
             pageList.appendChild(div);
         }
 
-        // Habilitar la reordenación arrastrando en la cuadrícula de columnas
+        // Habilitar la reordenación arrastrando en horizontal y vertical
         new Sortable(pageList, {
             animation: 150,
             ghostClass: 'sortable-ghost',
             onEnd: function() {
-                const items = pageList.querySelectorAll('.reorder-item');
+                const items = pageList.querySelectorAll('.page-item');
                 pageOrder = Array.from(items).map(item => parseInt(item.dataset.page));
             }
         });

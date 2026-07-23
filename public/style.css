@@ -121,7 +121,7 @@ h1 {
     justify-content: flex-start;
 }
 
-/* Items dentro de la cuadrícula (General) */
+/* Items dentro de la cuadrícula */
 .page-item {
     position: relative;
     width: 120px;
@@ -143,9 +143,8 @@ h1 {
 }
 
 .page-item canvas {
-    width: 100% !important;
-    max-width: 100% !important;
-    height: auto !important;
+    max-width: 100%;
+    height: auto;
     border-radius: 4px;
     background: #ffffff;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
@@ -184,10 +183,8 @@ h1 {
     display: flex;
 }
 
-/* Estilos específicos para Reorder (Miniaturas compactas arrastables) */
+/* Estilos específicos para Reorder (Arrastrar) */
 .reorder-item {
-    width: 120px;
-    max-width: 120px;
     cursor: grab;
 }
 
@@ -302,7 +299,7 @@ input[type="text"]:focus {
 }
 
 .btn:disabled {
-    background: #aeae22;
+    background: #aeae2;
     cursor: not-allowed;
 }
 

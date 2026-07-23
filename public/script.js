@@ -29,7 +29,7 @@ function showStatus(elementId, message, isError = false) {
 }
 
 // ============================================================
-// MANEJO DE TABS
+// MANEJO DE TABS (¡AQUÍ ESTABA EL ERROR!)
 // ============================================================
 const tabs = document.querySelectorAll('.tab');
 const panels = {
@@ -37,7 +37,8 @@ const panels = {
     split: document.getElementById('splitPanel'),
     delete: document.getElementById('deletePanel'),
     extract: document.getElementById('extractPanel'),
-    reorder: document.getElementById('reorderPanel')
+    reorder: document.getElementById('reorderPanel'),
+    compress: document.getElementById('compressPanel') // ← AÑADIDO
 };
 
 tabs.forEach(tab => {
@@ -224,8 +225,7 @@ function handleMergeFiles(files) {
     fileInputMerge.value = '';
 }
 
-dropZoneMerge.addEventListener('dragover', e => { e.preventDefault();
-    dropZoneMerge.classList.add('dragover'); });
+dropZoneMerge.addEventListener('dragover', e => { e.preventDefault(); dropZoneMerge.classList.add('dragover'); });
 dropZoneMerge.addEventListener('dragleave', () => dropZoneMerge.classList.remove('dragover'));
 dropZoneMerge.addEventListener('drop', e => {
     e.preventDefault();
@@ -234,8 +234,7 @@ dropZoneMerge.addEventListener('drop', e => {
 });
 dropZoneMerge.addEventListener('click', () => fileInputMerge.click());
 fileInputMerge.addEventListener('change', e => handleMergeFiles(e.target.files));
-clearMerge.addEventListener('click', () => { mergeFiles = [];
-    renderMergeList(); });
+clearMerge.addEventListener('click', () => { mergeFiles = []; renderMergeList(); });
 
 mergeBtn.addEventListener('click', async () => {
     if (mergeFiles.length === 0) { alert('No hay archivos para unir'); return; }
@@ -285,8 +284,7 @@ async function loadSplitPreview(file) {
     await renderPageGrid(file, 'splitPageGrid', splitSelections);
 }
 
-dropZoneSplit.addEventListener('dragover', e => { e.preventDefault();
-    dropZoneSplit.classList.add('dragover'); });
+dropZoneSplit.addEventListener('dragover', e => { e.preventDefault(); dropZoneSplit.classList.add('dragover'); });
 dropZoneSplit.addEventListener('dragleave', () => dropZoneSplit.classList.remove('dragover'));
 dropZoneSplit.addEventListener('drop', e => {
     e.preventDefault();
@@ -371,8 +369,7 @@ async function loadDeletePreview(file) {
     await renderPageGrid(file, 'deletePageGrid', deleteSelections);
 }
 
-dropZoneDelete.addEventListener('dragover', e => { e.preventDefault();
-    dropZoneDelete.classList.add('dragover'); });
+dropZoneDelete.addEventListener('dragover', e => { e.preventDefault(); dropZoneDelete.classList.add('dragover'); });
 dropZoneDelete.addEventListener('dragleave', () => dropZoneDelete.classList.remove('dragover'));
 dropZoneDelete.addEventListener('drop', e => {
     e.preventDefault();
@@ -451,8 +448,7 @@ async function loadExtractPreview(file) {
     await renderPageGrid(file, 'extractPageGrid', extractSelections);
 }
 
-dropZoneExtract.addEventListener('dragover', e => { e.preventDefault();
-    dropZoneExtract.classList.add('dragover'); });
+dropZoneExtract.addEventListener('dragover', e => { e.preventDefault(); dropZoneExtract.classList.add('dragover'); });
 dropZoneExtract.addEventListener('dragleave', () => dropZoneExtract.classList.remove('dragover'));
 dropZoneExtract.addEventListener('drop', e => {
     e.preventDefault();
@@ -585,8 +581,7 @@ async function loadReorderPages(file) {
     }
 }
 
-dropZoneReorder.addEventListener('dragover', e => { e.preventDefault();
-    dropZoneReorder.classList.add('dragover'); });
+dropZoneReorder.addEventListener('dragover', e => { e.preventDefault(); dropZoneReorder.classList.add('dragover'); });
 dropZoneReorder.addEventListener('dragleave', () => dropZoneReorder.classList.remove('dragover'));
 dropZoneReorder.addEventListener('drop', e => {
     e.preventDefault();
@@ -636,12 +631,6 @@ reorderBtn.addEventListener('click', async () => {
         showLoading(false);
     }
 });
-
-// ============================================================
-// INICIALIZACIÓN
-// ============================================================
-updateMergeCount();
-console.log('📄 Suite PDF cargada correctamente');
 
 // ============================================================
 // COMPRESS (comprimir PDF)
@@ -704,3 +693,9 @@ compressBtn.addEventListener('click', async () => {
         showLoading(false);
     }
 });
+
+// ============================================================
+// INICIALIZACIÓN
+// ============================================================
+updateMergeCount();
+console.log('📄 Suite PDF cargada correctamente');

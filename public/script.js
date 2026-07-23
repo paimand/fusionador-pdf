@@ -29,7 +29,7 @@ function showStatus(elementId, message, isError = false) {
 }
 
 // ============================================================
-// MANEJO DE TABS (¡AQUÍ ESTABA EL ERROR!)
+// MANEJO DE TABS
 // ============================================================
 const tabs = document.querySelectorAll('.tab');
 const panels = {
@@ -38,7 +38,7 @@ const panels = {
     delete: document.getElementById('deletePanel'),
     extract: document.getElementById('extractPanel'),
     reorder: document.getElementById('reorderPanel'),
-    compress: document.getElementById('compressPanel') // ← AÑADIDO
+    compress: document.getElementById('compressPanel')
 };
 
 tabs.forEach(tab => {
@@ -633,7 +633,7 @@ reorderBtn.addEventListener('click', async () => {
 });
 
 // ============================================================
-// COMPRESS (comprimir PDF)
+// COMPRESS (comprimir PDF - Procesado en Cliente)
 // ============================================================
 let compressFile = null;
 const dropZoneCompress = document.getElementById('dropZoneCompress');
@@ -667,12 +667,70 @@ compressBtn.addEventListener('click', async () => {
 
     compressBtn.disabled = true;
     showLoading(true);
-    try {
-        const formData = new FormData();
-        formData.append('file', compressFile);
-        formData.append('level', level);
+    showStatus('compressStatus', '⏳ Renderizando y optimizando páginas...');
 
-        const resp = await fetch('/compress', { method: 'POST', body: formData });
+    try {
+        const arrayBuffer = await readFileAsArrayBuffer(compressFile);
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const totalPages = pdf.numPages;
+
+        let maxDimension, quality;
+        switch (level) {
+            case 'extreme':
+                maxDimension = 800;
+                quality = 0.5;
+                break;
+            case 'recommended':
+                maxDimension = 1200;
+                quality = 0.7;
+                break;
+            case 'low':
+                maxDimension = 1800;
+                quality = 0.85;
+                break;
+            default:
+                maxDimension = 1200;
+                quality = 0.7;
+        }
+
+        const images = [];
+
+        for (let i = 1; i <= totalPages; i++) {
+            showStatus('compressStatus', `⏳ Procesando página ${i} de ${totalPages}...`);
+            const page = await pdf.getPage(i);
+            const unscaledViewport = page.getViewport({ scale: 1.0 });
+
+            const currentMax = Math.max(unscaledViewport.width, unscaledViewport.height);
+            let scale = 1.0;
+            if (currentMax > maxDimension) {
+                scale = maxDimension / currentMax;
+            }
+
+            const viewport = page.getViewport({ scale });
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.floor(viewport.width);
+            canvas.height = Math.floor(viewport.height);
+            const ctx = canvas.getContext('2d');
+
+            // Asegurar fondo blanco puro
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            await page.render({ canvasContext: ctx, viewport }).promise;
+
+            // Extraer JPEG con calidad reducida de forma nativa desde el navegador
+            const dataUrl = canvas.toDataURL('image/jpeg', quality);
+            images.push(dataUrl);
+        }
+
+        showStatus('compressStatus', '⏳ Generando archivo final...');
+
+        const resp = await fetch('/compress', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ images, level })
+        });
+
         if (!resp.ok) throw new Error(await resp.text());
 
         const blob = await resp.blob();

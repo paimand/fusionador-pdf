@@ -4,7 +4,6 @@ const { PDFDocument } = require('pdf-lib');
 const path = require('path');
 const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
 const { createCanvas } = require('canvas');
-const Jimp = require('jimp');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -181,92 +180,87 @@ app.post('/reorder-pages', upload.single('file'), async (req, res) => {
     }
 });
 
-// ========== RUTA: COMPRIMIR PDF (con Jimp y fondo blanco) ==========
+// ========== RUTA: COMPRIMIR PDF (Corregida) ==========
 app.post('/compress', upload.single('file'), async (req, res) => {
     try {
         const file = req.file;
         if (!file) return res.status(400).send('No se subió ningún archivo');
 
-        const level = req.body.level || 'recommended'; // 'extreme', 'recommended', 'low'
+        const level = req.body.level || 'recommended';
 
-        // 1. Cargar el PDF con pdfjs (versión 3.11.174)
+        // 1. Cargar el PDF con pdfjs
         const data = new Uint8Array(file.buffer);
         const loadingTask = pdfjsLib.getDocument({ data });
         const pdf = await loadingTask.promise;
         const totalPages = pdf.numPages;
 
-        // 2. Definir parámetros según nivel
-        let maxWidth, quality;
+        // 2. Ajustar parámetros de compresión según nivel
+        let maxDimension, quality;
         switch (level) {
             case 'extreme':
-                maxWidth = 600;
-                quality = 60;
+                maxDimension = 800;
+                quality = 0.5; // 50%
                 break;
             case 'recommended':
-                maxWidth = 1000;
-                quality = 80;
+                maxDimension = 1200;
+                quality = 0.7; // 70%
                 break;
             case 'low':
-                maxWidth = 1400;
-                quality = 90;
+                maxDimension = 1800;
+                quality = 0.85; // 85%
                 break;
             default:
-                maxWidth = 1000;
-                quality = 80;
+                maxDimension = 1200;
+                quality = 0.7;
         }
 
-        // 3. Crear un nuevo PDF con pdf-lib
         const newPdf = await PDFDocument.create();
 
-        // 4. Procesar cada página
+        // 3. Procesar página por página
         for (let i = 1; i <= totalPages; i++) {
             const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 1.0 });
             
-            // Calcular dimensiones manteniendo proporción
-            let width = viewport.width;
-            let height = viewport.height;
-            if (width > maxWidth) {
-                const ratio = maxWidth / width;
-                width = maxWidth;
-                height = height * ratio;
+            // Obtener el viewport base a escala 1.0
+            const unscaledViewport = page.getViewport({ scale: 1.0 });
+            
+            // Calcular la escala de reducción requerida
+            const currentMax = Math.max(unscaledViewport.width, unscaledViewport.height);
+            let scale = 1.0;
+            if (currentMax > maxDimension) {
+                scale = maxDimension / currentMax;
             }
 
-            const canvas = createCanvas(width, height);
+            // Crear el viewport escalado exactamente a las nuevas dimensiones
+            const viewport = page.getViewport({ scale });
+
+            const canvas = createCanvas(Math.floor(viewport.width), Math.floor(viewport.height));
             const context = canvas.getContext('2d');
 
-            // 🔥 FIJAR FONDO BLANCO (SOLUCIÓN AL PROBLEMA DE NEGRO)
+            // Rellenar fondo blanco limpio antes de renderizar
             context.fillStyle = '#ffffff';
-            context.fillRect(0, 0, width, height);
-            
-            // Renderizar la página al canvas
-            await page.render({ canvasContext: context, viewport: viewport }).promise;
+            context.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Obtener el buffer de la imagen (PNG)
-            const pngBuffer = canvas.toBuffer('image/png');
+            // Renderizar la página PDF en el Canvas con el viewport escalado
+            await page.render({
+                canvasContext: context,
+                viewport: viewport
+            }).promise;
 
-            // Comprimir la imagen con Jimp (calidad ajustada)
-            const image = await Jimp.read(pngBuffer);
-            image.quality(quality);
-            const jpegBuffer = await image.getBufferAsync(Jimp.MIME_JPEG);
+            // Obtener buffer JPEG optimizado directamente de canvas
+            const jpegBuffer = canvas.toBuffer('image/jpeg', { quality: quality });
 
-            // Incrustar la imagen JPEG en el nuevo PDF
+            // Incrustar en el nuevo documento PDF
             const img = await newPdf.embedJpg(jpegBuffer);
-            const imgDims = img.scale(1);
-            const pageWidth = imgDims.width;
-            const pageHeight = imgDims.height;
-
-            // Añadir una página al nuevo PDF con el tamaño de la imagen
-            const newPage = newPdf.addPage([pageWidth, pageHeight]);
+            const newPage = newPdf.addPage([viewport.width, viewport.height]);
+            
             newPage.drawImage(img, {
                 x: 0,
                 y: 0,
-                width: pageWidth,
-                height: pageHeight,
+                width: viewport.width,
+                height: viewport.height,
             });
         }
 
-        // 5. Guardar el PDF comprimido
         const pdfBytes = await newPdf.save();
 
         res.setHeader('Content-Type', 'application/pdf');

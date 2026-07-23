@@ -6,10 +6,10 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuración de Multer para almacenar archivos en memoria RAM
+// Configuración de Multer
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Middleware para parsing de JSON y archivos estáticos
+// Middleware
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 app.use(express.static('public'));
@@ -154,7 +154,7 @@ app.post('/reorder-pages', upload.single('file'), async (req, res) => {
 });
 
 // ============================================================
-// ENDPOINT: COMPRESS (RECONSTRUCCIÓN DESDE CANVAS CLIENTE)
+// ENDPOINT: COMPRESS (COMPRIMIR)
 // ============================================================
 app.post('/compress', async (req, res) => {
     try {
@@ -187,7 +187,7 @@ app.post('/compress', async (req, res) => {
     }
 });
 
-// Función auxiliar para rangos de páginas ("1,3,5-8")
+// Función auxiliar para rangos de páginas
 function parseRanges(rangeStr, maxPages) {
     const indexes = [];
     if (!rangeStr) return indexes;
@@ -212,7 +212,6 @@ function parseRanges(rangeStr, maxPages) {
     return indexes;
 }
 
-// Iniciar Servidor
 app.listen(PORT, () => {
     console.log(`🚀 Servidor ejecutándose en http://localhost:${PORT}`);
 });

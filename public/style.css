@@ -1,5 +1,5 @@
 /* ============================================================
-   ESTILOS GENERALES Y RESET
+   ESTILOS BASE Y LAYOUT
    ============================================================ */
 * {
     box-sizing: border-box;
@@ -70,9 +70,6 @@ h1 {
     color: #ffffff;
 }
 
-/* ============================================================
-   PANELISTAS / PANELES
-   ============================================================ */
 .panel {
     display: none;
 }
@@ -82,7 +79,7 @@ h1 {
 }
 
 /* ============================================================
-   ZONA DROP (DRAG & DROP)
+   ZONA DROP
    ============================================================ */
 .drop-zone {
     border: 2px dashed #c7c7cc;
@@ -110,21 +107,24 @@ h1 {
 }
 
 /* ============================================================
-   CUADRÍCULAS DE PÁGINAS Y MINIATURAS (COLUMNAS)
+   CUADRÍCULAS DE PÁGINAS Y MINIATURAS (EN COLUMNAS)
    ============================================================ */
-.page-grid, .page-grid-reorder {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px;
+.page-grid, #pageList {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 16px !important;
     margin-top: 20px;
     margin-bottom: 20px;
+    padding: 0;
+    list-style: none;
     justify-content: flex-start;
 }
 
-/* Items dentro de la cuadrícula */
+/* Tarjeta individual de página */
 .page-item {
     position: relative;
-    width: 120px;
+    width: 120px !important;
+    max-width: 120px !important;
     background: #ffffff;
     border: 2px solid #e5e5ea;
     border-radius: 10px;
@@ -143,8 +143,8 @@ h1 {
 }
 
 .page-item canvas {
-    max-width: 100%;
-    height: auto;
+    width: 100% !important;
+    height: auto !important;
     border-radius: 4px;
     background: #ffffff;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
@@ -157,7 +157,7 @@ h1 {
     font-weight: 500;
 }
 
-/* Selección de páginas (Split, Delete, Extract) */
+/* Selección (Split, Delete, Extract) */
 .page-item.selected {
     border-color: #0071e3;
     background-color: #f0f7ff;
@@ -183,12 +183,12 @@ h1 {
     display: flex;
 }
 
-/* Estilos específicos para Reorder (Arrastrar) */
-.reorder-item {
+/* Arrastrar en "Ordenar páginas" */
+#pageList .page-item {
     cursor: grab;
 }
 
-.reorder-item:active {
+#pageList .page-item:active {
     cursor: grabbing;
 }
 
@@ -198,7 +198,7 @@ h1 {
 }
 
 /* ============================================================
-   LISTA DE ARCHIVOS (MERGE)
+   LISTAS Y FORMULARIOS
    ============================================================ */
 .file-list {
     list-style: none;
@@ -248,9 +248,6 @@ h1 {
     padding: 0 8px;
 }
 
-/* ============================================================
-   FORMULARIOS, BOTONES Y ACCIONES
-   ============================================================ */
 .options-group {
     margin-bottom: 20px;
     display: flex;
@@ -299,7 +296,7 @@ input[type="text"]:focus {
 }
 
 .btn:disabled {
-    background: #aeae2;
+    background: #aeae22;
     cursor: not-allowed;
 }
 
@@ -324,9 +321,6 @@ input[type="text"]:focus {
     margin-bottom: 15px;
 }
 
-/* ============================================================
-   INDICADOR DE CARGA Y ESTADOS
-   ============================================================ */
 .loading {
     display: none;
     text-align: center;

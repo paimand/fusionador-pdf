@@ -516,6 +516,9 @@ extractBtn.addEventListener('click', async () => {
 // ============================================================
 // REORDER (ordenar páginas en cuadrícula de miniaturas)
 // ============================================================
+// ============================================================
+// REORDER (ordenar páginas en cuadrícula de miniaturas)
+// ============================================================
 let reorderFile = null;
 let pageOrder = [];
 const dropZoneReorder = document.getElementById('dropZoneReorder');
@@ -532,17 +535,18 @@ async function loadReorderPages(file) {
         pageList.innerHTML = '';
 
         for (let i = 1; i <= totalPages; i++) {
-            const div = document.createElement('div');
-            div.className = 'reorder-item';
-            div.dataset.page = i;
+            const li = document.createElement('li');
+            li.className = 'reorder-item';
+            li.dataset.page = i;
 
             const canvas = document.createElement('canvas');
-            div.appendChild(canvas);
+            canvas.style.pointerEvents = 'none'; // Evita que el canvas bloquee el arrastre
+            li.appendChild(canvas);
 
             const label = document.createElement('div');
             label.className = 'page-number';
             label.textContent = `Pág. ${i}`;
-            div.appendChild(label);
+            li.appendChild(label);
 
             try {
                 const page = await pdf.getPage(i);
@@ -563,12 +567,14 @@ async function loadReorderPages(file) {
                 ctx.fillText('Pág. ' + i, (canvas.width || 120) / 2, (canvas.height || 160) / 2);
             }
 
-            pageList.appendChild(div);
+            pageList.appendChild(li);
         }
 
+        // Re-inicializamos Sortable para asegurar que reconozca los nuevos elementos li
         new Sortable(pageList, {
             animation: 150,
             ghostClass: 'sortable-ghost',
+            draggable: '.reorder-item',
             onEnd: function() {
                 const items = pageList.querySelectorAll('.reorder-item');
                 pageOrder = Array.from(items).map(item => parseInt(item.dataset.page));

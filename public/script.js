@@ -166,7 +166,7 @@ const fileCountMerge = document.getElementById('fileCountMerge');
 const clearMerge = document.getElementById('clearMerge');
 const mergeBtn = document.getElementById('mergeBtn');
 
-let mergeSortable = new Sortable(fileListMerge, {
+new Sortable(fileListMerge, {
     animation: 150,
     ghostClass: 'sortable-ghost',
     onEnd: function(evt) {
@@ -531,30 +531,13 @@ async function loadReorderPages(file) {
         pageOrder = Array.from({ length: totalPages }, (_, i) => i + 1);
         
         pageList.innerHTML = '';
-        // Forzar contenedor tipo cuadrícula/flexbox para mostrar en columnas
-        pageList.style.display = 'flex';
-        pageList.style.flexWrap = 'wrap';
-        pageList.style.gap = '15px';
-        pageList.style.marginTop = '20px';
-        pageList.style.padding = '0';
-        pageList.style.listStyle = 'none';
 
         for (let i = 1; i <= totalPages; i++) {
             const div = document.createElement('div');
             div.className = 'page-item';
             div.dataset.page = i;
 
-            // Dimensiones fijas directas para evitar el tamaño completo
-            div.style.width = '120px';
-            div.style.maxWidth = '120px';
-            div.style.cursor = 'grab';
-            div.style.display = 'flex';
-            div.style.flexDirection = 'column';
-            div.style.alignItems = 'center';
-
             const canvas = document.createElement('canvas');
-            canvas.style.width = '100%';
-            canvas.style.height = 'auto';
             div.appendChild(canvas);
 
             const label = document.createElement('div');
@@ -584,7 +567,7 @@ async function loadReorderPages(file) {
             pageList.appendChild(div);
         }
 
-        // Habilitar la reordenación arrastrando en horizontal y vertical
+        // Habilitar arrastrar y soltar
         new Sortable(pageList, {
             animation: 150,
             ghostClass: 'sortable-ghost',
@@ -729,13 +712,11 @@ compressBtn.addEventListener('click', async () => {
             canvas.height = Math.floor(viewport.height);
             const ctx = canvas.getContext('2d');
 
-            // Asegurar fondo blanco puro
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             await page.render({ canvasContext: ctx, viewport }).promise;
 
-            // Extraer JPEG con calidad reducida de forma nativa desde el navegador
             const dataUrl = canvas.toDataURL('image/jpeg', quality);
             images.push(dataUrl);
         }

@@ -1,12 +1,13 @@
 const express = require('express');
 const multer = require('multer');
 const { PDFDocument } = require('pdf-lib');
-const path = require('path');
-const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
-const { createCanvas } = require('canvas');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Configurar límite de payload de express para recibir las imágenes comprimidas
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -180,96 +181,39 @@ app.post('/reorder-pages', upload.single('file'), async (req, res) => {
     }
 });
 
-// ========== RUTA: COMPRIMIR PDF (Corregida) ==========
-app.post('/compress', upload.single('file'), async (req, res) => {
+// ========== RUTA: COMPRIMIR PDF (Recibe páginas procesadas desde el cliente) ==========
+app.post('/compress', async (req, res) => {
     try {
-        const file = req.file;
-        if (!file) return res.status(400).send('No se subió ningún archivo');
-
-        const level = req.body.level || 'recommended';
-
-        // 1. Cargar el PDF con pdfjs
-        const data = new Uint8Array(file.buffer);
-        const loadingTask = pdfjsLib.getDocument({ data });
-        const pdf = await loadingTask.promise;
-        const totalPages = pdf.numPages;
-
-        // 2. Ajustar parámetros de compresión según nivel
-        let maxDimension, quality;
-        switch (level) {
-            case 'extreme':
-                maxDimension = 800;
-                quality = 0.5; // 50%
-                break;
-            case 'recommended':
-                maxDimension = 1200;
-                quality = 0.7; // 70%
-                break;
-            case 'low':
-                maxDimension = 1800;
-                quality = 0.85; // 85%
-                break;
-            default:
-                maxDimension = 1200;
-                quality = 0.7;
+        const { images, level } = req.body;
+        if (!images || !Array.isArray(images) || images.length === 0) {
+            return res.status(400).send('No se recibieron páginas para comprimir');
         }
 
         const newPdf = await PDFDocument.create();
 
-        // 3. Procesar página por página
-        for (let i = 1; i <= totalPages; i++) {
-            const page = await pdf.getPage(i);
-            
-            // Obtener el viewport base a escala 1.0
-            const unscaledViewport = page.getViewport({ scale: 1.0 });
-            
-            // Calcular la escala de reducción requerida
-            const currentMax = Math.max(unscaledViewport.width, unscaledViewport.height);
-            let scale = 1.0;
-            if (currentMax > maxDimension) {
-                scale = maxDimension / currentMax;
-            }
+        for (const imgDataUrl of images) {
+            const base64Data = imgDataUrl.replace(/^data:image\/jpeg;base64,/, "");
+            const imageBuffer = Buffer.from(base64Data, 'base64');
+            const embeddedImage = await newPdf.embedJpg(imageBuffer);
 
-            // Crear el viewport escalado exactamente a las nuevas dimensiones
-            const viewport = page.getViewport({ scale });
-
-            const canvas = createCanvas(Math.floor(viewport.width), Math.floor(viewport.height));
-            const context = canvas.getContext('2d');
-
-            // Rellenar fondo blanco limpio antes de renderizar
-            context.fillStyle = '#ffffff';
-            context.fillRect(0, 0, canvas.width, canvas.height);
-
-            // Renderizar la página PDF en el Canvas con el viewport escalado
-            await page.render({
-                canvasContext: context,
-                viewport: viewport
-            }).promise;
-
-            // Obtener buffer JPEG optimizado directamente de canvas
-            const jpegBuffer = canvas.toBuffer('image/jpeg', { quality: quality });
-
-            // Incrustar en el nuevo documento PDF
-            const img = await newPdf.embedJpg(jpegBuffer);
-            const newPage = newPdf.addPage([viewport.width, viewport.height]);
-            
-            newPage.drawImage(img, {
+            const page = newPdf.addPage([embeddedImage.width, embeddedImage.height]);
+            page.drawImage(embeddedImage, {
                 x: 0,
                 y: 0,
-                width: viewport.width,
-                height: viewport.height,
+                width: embeddedImage.width,
+                height: embeddedImage.height,
             });
         }
 
-        const pdfBytes = await newPdf.save();
+        const pdfBytes = await newPdf.save({ useObjectStreams: true });
 
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=compressed_${level}.pdf`);
+        res.setHeader('Content-Disposition', `attachment; filename=compressed_${level || 'pdf'}.pdf`);
         res.send(Buffer.from(pdfBytes));
 
     } catch (error) {
         console.error('Error al comprimir:', error);
-        res.status(500).send('Error al comprimir el PDF');
+        res.status(500).send('Error al generar el PDF comprimido');
     }
 });
 

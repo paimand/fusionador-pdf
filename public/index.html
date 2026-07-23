@@ -15,7 +15,7 @@
             padding: 0;
         }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #f2f4f7;
             color: #1d1d1f;
             padding: 40px 20px;
@@ -36,14 +36,18 @@
             text-align: center;
             margin-bottom: 28px;
         }
-        .tool-header h1 {
-            font-size: 32px;
-            font-weight: 700;
-            color: #1d1d1f;
+        .tool-header img {
+            max-width: 280px;
+            width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto 12px;
         }
         .tool-header p {
             color: #6e6e73;
             font-size: 18px;
+            max-width: 700px;
+            margin: 0 auto;
         }
 
         /* ===== TABS ===== */
@@ -69,8 +73,8 @@
             color: #1d1d1f;
         }
         .tab.active {
-            color: #0071e3;
-            border-bottom-color: #0071e3;
+            color: #ec9b59;
+            border-bottom-color: #ec9b59;
         }
 
         /* ===== PANELES ===== */
@@ -87,19 +91,19 @@
             border-radius: 18px;
             padding: 36px 20px;
             text-align: center;
-            background: #fafafc;
+            background: rgba(236, 155, 89, 0.2); /* #ec9b59 semitransparente */
             cursor: pointer;
             transition: background 0.2s, border-color 0.2s;
             margin-bottom: 20px;
             position: relative;
         }
         .upload-area:hover {
-            background: #f5f5fa;
-            border-color: #0071e3;
+            background: rgba(236, 155, 89, 0.35);
+            border-color: #ec9b59;
         }
         .upload-area.dragover {
-            background: #e8f1ff;
-            border-color: #0071e3;
+            background: rgba(236, 155, 89, 0.5);
+            border-color: #ec9b59;
         }
         .upload-area input[type="file"] {
             position: absolute;
@@ -112,7 +116,7 @@
             color: #1d1d1f;
         }
 
-        /* ===== LISTA DE ARCHIVOS (para Merge y Reorder) ===== */
+        /* ===== LISTA DE ARCHIVOS (Merge y Reorder) ===== */
         .file-list-header {
             display: flex;
             justify-content: space-between;
@@ -152,7 +156,7 @@
         .file-list li.sortable-ghost {
             opacity: 0.4;
             background: #e8f1ff;
-            border: 1px dashed #0071e3;
+            border: 1px dashed #ec9b59;
         }
         .file-list li .thumbnail {
             flex-shrink: 0;
@@ -212,11 +216,11 @@
             text-align: center;
         }
         .page-item:hover {
-            border-color: #0071e3;
+            border-color: #ec9b59;
         }
         .page-item.selected {
-            border-color: #0071e3;
-            box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.3);
+            border-color: #ec9b59;
+            box-shadow: 0 0 0 3px rgba(236, 155, 89, 0.3);
         }
         .page-item canvas {
             width: 100%;
@@ -232,7 +236,7 @@
             position: absolute;
             top: 6px;
             right: 6px;
-            background: #0071e3;
+            background: #ec9b59;
             color: #fff;
             border-radius: 50%;
             width: 24px;
@@ -278,11 +282,11 @@
             transform: scale(0.97);
         }
         .btn-primary {
-            background: #0071e3;
+            background: #ec9b59;
             color: #fff;
         }
         .btn-primary:hover {
-            background: #005bbf;
+            background: #d6843e;
         }
         .btn-primary:disabled {
             opacity: 0.6;
@@ -302,7 +306,7 @@
             text-align: center;
             font-size: 16px;
             font-weight: 500;
-            color: #0071e3;
+            color: #ec9b59;
             display: none;
         }
 
@@ -325,6 +329,9 @@
             .page-grid {
                 grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
             }
+            .tool-header img {
+                max-width: 200px;
+            }
         }
     </style>
 </head>
@@ -332,8 +339,8 @@
 
     <div class="container">
         <header class="tool-header">
-            <h1>📄 Suite PDF</h1>
-            <p>Elige una operación y sube tus archivos</p>
+            <img src="https://i.ibb.co/CpS2F0rt/Suite-PDF.png" alt="Suite PDF">
+            <p>Une, separa, elimina, extrae y ordena PDF online de forma completamente gratuita. No se necesita instalación. Elige una operación y sube tus archivos.</p>
         </header>
 
         <!-- Tabs -->
@@ -361,7 +368,7 @@
                 <ul id="fileListMerge" class="file-list"></ul>
                 <div class="actions">
                     <button id="clearMerge" class="btn btn-secondary">Vaciar lista</button>
-                    <button id="mergeBtn" class="btn btn-primary">🔗 Unir PDFs</button>
+                    <button id="mergeBtn" class="btn btn-primary">Unir PDFs</button>
                 </div>
             </div>
 
@@ -396,7 +403,7 @@
                 </div>
 
                 <div class="actions">
-                    <button id="splitBtn" class="btn btn-primary">✂️ Dividir</button>
+                    <button id="splitBtn" class="btn btn-primary">Dividir</button>
                 </div>
                 <div id="splitStatus" style="margin-top:12px;"></div>
             </div>
@@ -422,7 +429,7 @@
                 </div>
 
                 <div class="actions">
-                    <button id="deleteBtn" class="btn btn-primary">🗑️ Eliminar páginas</button>
+                    <button id="deleteBtn" class="btn btn-primary">Eliminar páginas</button>
                 </div>
                 <div id="deleteStatus" style="margin-top:12px;"></div>
             </div>
@@ -448,7 +455,7 @@
                 </div>
 
                 <div class="actions">
-                    <button id="extractBtn" class="btn btn-primary">📤 Extraer páginas</button>
+                    <button id="extractBtn" class="btn btn-primary">Extraer páginas</button>
                 </div>
                 <div id="extractStatus" style="margin-top:12px;"></div>
             </div>
@@ -464,7 +471,7 @@
                     <ul id="pageList" class="file-list" style="min-height:60px;"></ul>
                 </div>
                 <div class="actions">
-                    <button id="reorderBtn" class="btn btn-primary">🔄 Aplicar nuevo orden</button>
+                    <button id="reorderBtn" class="btn btn-primary">Aplicar nuevo orden</button>
                 </div>
                 <div id="reorderStatus" style="margin-top:12px;"></div>
             </div>

@@ -2,6 +2,9 @@ const express = require('express');
 const multer = require('multer');
 const { PDFDocument } = require('pdf-lib');
 const path = require('path');
+const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
+const { createCanvas } = require('canvas');
+const sharp = require('sharp');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -72,7 +75,6 @@ app.post('/split', upload.single('file'), async (req, res) => {
             // Dividir en páginas individuales (devolver un ZIP)
             // Por ahora, devolvemos el mismo PDF (podrías implementar ZIP con archiver)
             // O devolvemos un PDF con la primera página y un mensaje
-            // Para no liar, lo dejamos como "no implementado" por ahora
             return res.status(501).send('Dividir en páginas individuales requiere generar un ZIP. Pendiente de implementar.');
         } else {
             // Dividir por rangos
@@ -183,6 +185,101 @@ app.post('/reorder-pages', upload.single('file'), async (req, res) => {
     }
 });
 
+// ========== RUTA: COMPRIMIR PDF ==========
+app.post('/compress', upload.single('file'), async (req, res) => {
+    try {
+        const file = req.file;
+        if (!file) return res.status(400).send('No se subió ningún archivo');
+
+        const level = req.body.level || 'recommended'; // 'extreme', 'recommended', 'low'
+
+        // 1. Cargar el PDF con pdfjs
+        const data = new Uint8Array(file.buffer);
+        const loadingTask = pdfjsLib.getDocument({ data });
+        const pdf = await loadingTask.promise;
+        const totalPages = pdf.numPages;
+
+        // 2. Definir parámetros según nivel
+        let scale, quality, maxWidth;
+        switch (level) {
+            case 'extreme':
+                maxWidth = 600;
+                quality = 60;
+                break;
+            case 'recommended':
+                maxWidth = 1000;
+                quality = 80;
+                break;
+            case 'low':
+                maxWidth = 1400;
+                quality = 90;
+                break;
+            default:
+                maxWidth = 1000;
+                quality = 80;
+        }
+
+        // 3. Crear un nuevo PDF con pdf-lib
+        const newPdf = await PDFDocument.create();
+
+        // 4. Procesar cada página
+        for (let i = 1; i <= totalPages; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 1.0 });
+            // Calcular dimensiones para el canvas (manteniendo proporción)
+            let width = viewport.width;
+            let height = viewport.height;
+            if (width > maxWidth) {
+                const ratio = maxWidth / width;
+                width = maxWidth;
+                height = height * ratio;
+            }
+
+            const canvas = createCanvas(width, height);
+            const context = canvas.getContext('2d');
+
+            // Renderizar la página al canvas
+            await page.render({ canvasContext: context, viewport: viewport }).promise;
+
+            // Obtener el buffer de la imagen (PNG)
+            const pngBuffer = canvas.toBuffer('image/png');
+
+            // Comprimir la imagen con sharp (convertir a JPEG con calidad ajustada)
+            const jpegBuffer = await sharp(pngBuffer)
+                .jpeg({ quality: quality, progressive: true })
+                .toBuffer();
+
+            // Incrustar la imagen JPEG en el nuevo PDF
+            const image = await newPdf.embedJpg(jpegBuffer);
+            // Obtener dimensiones de la imagen incrustada
+            const imgDims = image.scale(1);
+            const pageWidth = imgDims.width;
+            const pageHeight = imgDims.height;
+
+            // Añadir una página al nuevo PDF con el tamaño de la imagen
+            const newPage = newPdf.addPage([pageWidth, pageHeight]);
+            newPage.drawImage(image, {
+                x: 0,
+                y: 0,
+                width: pageWidth,
+                height: pageHeight,
+            });
+        }
+
+        // 5. Guardar el PDF comprimido
+        const pdfBytes = await newPdf.save();
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=compressed_${level}.pdf`);
+        res.send(Buffer.from(pdfBytes));
+
+    } catch (error) {
+        console.error('Error al comprimir:', error);
+        res.status(500).send('Error al comprimir el PDF');
+    }
+});
+
+// ========== INICIO DEL SERVIDOR ==========
 app.listen(PORT, () => {
     console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });

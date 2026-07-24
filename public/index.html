@@ -3,183 +3,201 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Suite PDF - Edita tus PDFs</title>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+    <title>Fusionador y Editor PDF</title>
     <link rel="stylesheet" href="style.css">
+    <!-- PDF.js para la vista previa de páginas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- SortableJS para arrastrar y reordenar elementos -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
 </head>
 <body>
 
     <div class="container">
-        <header class="tool-header">
-            <img src="https://i.ibb.co/RTgVzm5q/Suite-PDF-removebg-preview.png" alt="Suite PDF">
-            <p>Une, separa, elimina, extrae y ordena PDF online de forma completamente gratuita. No se necesita instalación. Elige una operación y sube tus archivos.</p>
+        <header>
+            <h1>Suite PDF</h1>
+            <p>Herramienta para manipular y convertir tus documentos PDF</p>
         </header>
 
-        <!-- Tabs -->
+        <!-- PESTAÑAS / TABS -->
         <div class="tabs">
-            <button class="tab active" data-tab="merge">Unir</button>
-            <button class="tab" data-tab="split">Dividir</button>
-            <button class="tab" data-tab="delete">Eliminar páginas</button>
-            <button class="tab" data-tab="extract">Extraer páginas</button>
-            <button class="tab" data-tab="reorder">Ordenar páginas</button>
-            <button class="tab" data-tab="compress">Comprimir</button>
+            <button class="tab active" data-tab="merge">Unir PDFs</button>
+            <button class="tab" data-tab="split">Dividir PDF</button>
+            <button class="tab" data-tab="delete">Eliminar Páginas</button>
+            <button class="tab" data-tab="extract">Extraer Páginas</button>
+            <button class="tab" data-tab="reorder">Reordenar Páginas</button>
+            <button class="tab" data-tab="compress">Comprimir PDF</button>
+            <button class="tab" data-tab="convert">Convertir a PDF</button>
         </div>
 
-        <!-- Contenido -->
-        <div id="tabContent">
+        <main>
+            <!-- PANEL: UNIR -->
+            <div id="mergePanel" class="tab-panel active">
+                <h2>Unir Archivos PDF</h2>
+                <div class="drop-zone" id="dropZoneMerge">
+                    <p>Arrastra tus PDFs aquí o haz clic para seleccionar</p>
+                    <input type="file" id="fileInputMerge" multiple accept="application/pdf" hidden>
+                </div>
 
-            <!-- ==================== MERGE ==================== -->
-            <div id="mergePanel" class="panel active">
-                <div class="upload-area" id="dropZoneMerge">
-                    <p>Arrastra aquí tus PDF o haz clic para seleccionarlos</p>
-                    <input type="file" id="fileInputMerge" accept=".pdf" multiple>
-                </div>
                 <div class="file-list-header">
-                    <h2>Archivos seleccionados</h2>
-                    <span class="file-count" id="fileCountMerge">0 archivos</span>
+                    <span id="fileCountMerge">0 archivos</span>
+                    <button id="clearMerge" class="secondary-btn">Limpiar lista</button>
                 </div>
+
                 <ul id="fileListMerge" class="file-list"></ul>
-                <div class="actions">
-                    <button id="clearMerge" class="btn btn-secondary">Vaciar lista</button>
-                    <button id="mergeBtn" class="btn btn-primary">Unir PDFs</button>
-                </div>
+
+                <button id="mergeBtn" class="action-btn">Unir y Descargar PDF</button>
             </div>
 
-            <!-- ==================== SPLIT ==================== -->
-            <div id="splitPanel" class="panel">
-                <div class="upload-area" id="dropZoneSplit">
-                    <p>Arrastra o selecciona un PDF para dividir</p>
-                    <input type="file" id="fileInputSplit" accept=".pdf">
+            <!-- PANEL: DIVIDIR -->
+            <div id="splitPanel" class="tab-panel">
+                <h2>Dividir PDF</h2>
+                <div class="drop-zone" id="dropZoneSplit">
+                    <p>Arrastra tu PDF aquí o haz clic para seleccionar</p>
+                    <input type="file" id="fileInputSplit" accept="application/pdf" hidden>
                 </div>
 
-                <div style="margin: 16px 0;">
+                <div class="options-group">
                     <label>
-                        <input type="radio" name="splitMode" value="individual" checked> Dividir en páginas individuales
+                        <input type="radio" name="splitMode" value="individual" checked>
+                        Selección visual de páginas
                     </label>
-                    <label style="margin-left: 20px;">
-                        <input type="radio" name="splitMode" value="ranges"> Dividir por rangos
+                    <label>
+                        <input type="radio" name="splitMode" value="ranges">
+                        Por rango de páginas (ej. 1-3, 5, 8-10)
                     </label>
                 </div>
 
-                <!-- Vista previa de páginas -->
-                <div id="splitPreview" style="display:none; margin-bottom:16px;">
-                    <div class="grid-controls">
-                        <button id="splitSelectAll" class="btn btn-secondary" style="padding:6px 14px;">Seleccionar todas</button>
-                        <button id="splitDeselectAll" class="btn btn-secondary" style="padding:6px 14px;">Deseleccionar todas</button>
+                <div id="splitRangesContainer" style="display: none;" class="input-group">
+                    <label for="splitRanges">Páginas a extraer/separar:</label>
+                    <input type="text" id="splitRanges" placeholder="Ej: 1-5, 8, 11-13">
+                </div>
+
+                <div id="splitPreview" class="preview-container">
+                    <div class="preview-actions">
+                        <button id="splitSelectAll" class="secondary-btn">Seleccionar todas</button>
+                        <button id="splitDeselectAll" class="secondary-btn">Desmarcar todas</button>
                     </div>
                     <div id="splitPageGrid" class="page-grid"></div>
                 </div>
 
-                <div id="splitRangesContainer" style="display:none; margin-bottom:16px;">
-                    <label for="splitRanges">Rangos (ej. 1,3-5,7):</label>
-                    <input type="text" id="splitRanges" placeholder="Ej: 1,3-5,7" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
-                </div>
-
-                <div class="actions">
-                    <button id="splitBtn" class="btn btn-primary">Dividir</button>
-                </div>
-                <div id="splitStatus" style="margin-top:12px;"></div>
+                <button id="splitBtn" class="action-btn">Dividir PDF</button>
+                <div id="splitStatus" class="status-message"></div>
             </div>
 
-            <!-- ==================== DELETE ==================== -->
-            <div id="deletePanel" class="panel">
-                <div class="upload-area" id="dropZoneDelete">
-                    <p>Arrastra o selecciona un PDF para eliminar páginas</p>
-                    <input type="file" id="fileInputDelete" accept=".pdf">
+            <!-- PANEL: ELIMINAR PÁGINAS -->
+            <div id="deletePanel" class="tab-panel">
+                <h2>Eliminar Páginas</h2>
+                <div class="drop-zone" id="dropZoneDelete">
+                    <p>Arrastra tu PDF aquí o haz clic para seleccionar</p>
+                    <input type="file" id="fileInputDelete" accept="application/pdf" hidden>
                 </div>
 
-                <div id="deletePreview" style="display:none; margin-bottom:16px;">
-                    <div class="grid-controls">
-                        <button id="deleteSelectAll" class="btn btn-secondary" style="padding:6px 14px;">Seleccionar todas</button>
-                        <button id="deleteDeselectAll" class="btn btn-secondary" style="padding:6px 14px;">Deseleccionar todas</button>
+                <div class="input-group">
+                    <label for="deletePages">Páginas a eliminar (o haz clic en la vista previa):</label>
+                    <input type="text" id="deletePages" placeholder="Ej: 2, 4-6">
+                </div>
+
+                <div id="deletePreview" class="preview-container">
+                    <div class="preview-actions">
+                        <button id="deleteSelectAll" class="secondary-btn">Seleccionar todas</button>
+                        <button id="deleteDeselectAll" class="secondary-btn">Desmarcar todas</button>
                     </div>
                     <div id="deletePageGrid" class="page-grid"></div>
                 </div>
 
-                <div style="margin:16px 0;">
-                    <label for="deletePages">O escribe páginas a eliminar (ej. 1,3-5,7):</label>
-                    <input type="text" id="deletePages" placeholder="Ej: 1,3-5,7" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
-                </div>
-
-                <div class="actions">
-                    <button id="deleteBtn" class="btn btn-primary">Eliminar páginas</button>
-                </div>
-                <div id="deleteStatus" style="margin-top:12px;"></div>
+                <button id="deleteBtn" class="action-btn">Eliminar Páginas y Descargar</button>
+                <div id="deleteStatus" class="status-message"></div>
             </div>
 
-            <!-- ==================== EXTRACT ==================== -->
-            <div id="extractPanel" class="panel">
-                <div class="upload-area" id="dropZoneExtract">
-                    <p>Arrastra o selecciona un PDF para extraer páginas</p>
-                    <input type="file" id="fileInputExtract" accept=".pdf">
+            <!-- PANEL: EXTRAER PÁGINAS -->
+            <div id="extractPanel" class="tab-panel">
+                <h2>Extraer Páginas</h2>
+                <div class="drop-zone" id="dropZoneExtract">
+                    <p>Arrastra tu PDF aquí o haz clic para seleccionar</p>
+                    <input type="file" id="fileInputExtract" accept="application/pdf" hidden>
                 </div>
 
-                <div id="extractPreview" style="display:none; margin-bottom:16px;">
-                    <div class="grid-controls">
-                        <button id="extractSelectAll" class="btn btn-secondary" style="padding:6px 14px;">Seleccionar todas</button>
-                        <button id="extractDeselectAll" class="btn btn-secondary" style="padding:6px 14px;">Deseleccionar todas</button>
+                <div class="input-group">
+                    <label for="extractPages">Páginas a extraer (o haz clic en la vista previa):</label>
+                    <input type="text" id="extractPages" placeholder="Ej: 1, 3, 5-7">
+                </div>
+
+                <div id="extractPreview" class="preview-container">
+                    <div class="preview-actions">
+                        <button id="extractSelectAll" class="secondary-btn">Seleccionar todas</button>
+                        <button id="extractDeselectAll" class="secondary-btn">Desmarcar todas</button>
                     </div>
                     <div id="extractPageGrid" class="page-grid"></div>
                 </div>
 
-                <div style="margin:16px 0;">
-                    <label for="extractPages">O escribe páginas a extraer (ej. 1,3-5,7):</label>
-                    <input type="text" id="extractPages" placeholder="Ej: 1,3-5,7" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;">
-                </div>
-
-                <div class="actions">
-                    <button id="extractBtn" class="btn btn-primary">Extraer páginas</button>
-                </div>
-                <div id="extractStatus" style="margin-top:12px;"></div>
+                <button id="extractBtn" class="action-btn">Extraer Páginas en Nuevo PDF</button>
+                <div id="extractStatus" class="status-message"></div>
             </div>
 
-            <!-- ==================== REORDER ==================== -->
-            <div id="reorderPanel" class="panel">
-                <div class="upload-area" id="dropZoneReorder">
-                    <p>Arrastra o selecciona un PDF para ordenar sus páginas</p>
-                    <input type="file" id="fileInputReorder" accept=".pdf">
+            <!-- PANEL: REORDENAR PÁGINAS -->
+            <div id="reorderPanel" class="tab-panel">
+                <h2>Reordenar Páginas</h2>
+                <p class="panel-desc">Arrastra las páginas para cambiar su orden en el documento final.</p>
+                
+                <div class="drop-zone" id="dropZoneReorder">
+                    <p>Arrastra tu PDF aquí o haz clic para seleccionar</p>
+                    <input type="file" id="fileInputReorder" accept="application/pdf" hidden>
                 </div>
-                <div style="margin:16px 0;">
-                    <p>Arrastra las miniaturas para reordenar las páginas</p>
-                    <ul id="pageList" class="file-list" style="min-height:60px;"></ul>
-                </div>
-                <div class="actions">
-                    <button id="reorderBtn" class="btn btn-primary">Aplicar nuevo orden</button>
-                </div>
-                <div id="reorderStatus" style="margin-top:12px;"></div>
+
+                <ul id="pageList" class="reorder-grid"></ul>
+
+                <button id="reorderBtn" class="action-btn">Guardar Nuevo Orden</button>
+                <div id="reorderStatus" class="status-message"></div>
             </div>
 
-            <!-- ==================== COMPRESS ==================== -->
-            <div id="compressPanel" class="panel">
-                <div class="upload-area" id="dropZoneCompress">
-                    <p>Arrastra o selecciona un PDF para comprimir</p>
-                    <input type="file" id="fileInputCompress" accept=".pdf">
+            <!-- PANEL: COMPRIMIR PDF -->
+            <div id="compressPanel" class="tab-panel">
+                <h2>Comprimir PDF</h2>
+                <div class="drop-zone" id="dropZoneCompress">
+                    <p>Arrastra tu PDF aquí o haz clic para seleccionar</p>
+                    <input type="file" id="fileInputCompress" accept="application/pdf" hidden>
                 </div>
 
-                <div style="margin: 16px 0;">
-                    <label style="display:block; margin-bottom:6px; font-weight:600;">Nivel de compresión:</label>
-                    <label style="margin-right:15px;">
-                        <input type="radio" name="compressLevel" value="extreme" checked> Compresión Extrema (menos calidad)
-                    </label>
-                    <label style="margin-right:15px;">
-                        <input type="radio" name="compressLevel" value="recommended"> Compresión Recomendada
+                <div class="options-group">
+                    <h3>Nivel de compresión:</h3>
+                    <label>
+                        <input type="radio" name="compressLevel" value="recommended" checked>
+                        Recomendado (Buena calidad y reducción moderada)
                     </label>
                     <label>
-                        <input type="radio" name="compressLevel" value="low"> Baja Compresión (alta calidad)
+                        <input type="radio" name="compressLevel" value="extreme">
+                        Extrema (Mayor reducción de tamaño, calidad inferior)
+                    </label>
+                    <label>
+                        <input type="radio" name="compressLevel" value="low">
+                        Baja (Alta calidad, menor reducción de tamaño)
                     </label>
                 </div>
 
-                <div class="actions">
-                    <button id="compressBtn" class="btn btn-primary">Comprimir PDF</button>
-                </div>
-                <div id="compressStatus" style="margin-top:12px;"></div>
+                <button id="compressBtn" class="action-btn">Comprimir PDF</button>
+                <div id="compressStatus" class="status-message"></div>
             </div>
 
-        </div>
+            <!-- PANEL: CONVERTIR A PDF -->
+            <div id="convertPanel" class="tab-panel">
+                <h2>Convertir a PDF</h2>
+                <p class="panel-desc">Convierte imágenes (JPG, PNG) y documentos de Office (Word, PowerPoint, Excel) a formato PDF.</p>
+                
+                <div class="drop-zone" id="dropZoneConvert">
+                    <p>Arrastra tu archivo aquí o haz clic para seleccionar</p>
+                    <input type="file" id="fileInputConvert" accept=".jpg,.jpeg,.png,.doc,.docx,.ppt,.pptx,.xls,.xlsx" hidden>
+                </div>
 
-        <div id="loading">⏳ Procesando... Por favor espera.</div>
+                <button id="convertBtn" class="action-btn">Convertir a PDF</button>
+                <div id="convertStatus" class="status-message"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- PANTALLA DE CARGA -->
+    <div id="loading" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <p>Procesando documento...</p>
     </div>
 
     <script src="script.js"></script>

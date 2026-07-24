@@ -1,257 +1,284 @@
 const express = require('express');
 const multer = require('multer');
+const path = require('path');
+const util = require('util');
 const { PDFDocument } = require('pdf-lib');
+const libre = require('libreoffice-convert');
+const libreConvert = util.promisify(libre.convert);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configurar límite de payload para imágenes comprimidas
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ limit: '100mb', extended: true }));
+// Configuración de Multer para almacenar archivos en memoria (búfer)
+const storage = multer.memoryStorage();
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 50 * 1024 * 1024 } // Límite de 50 MB
+});
 
-const upload = multer({ storage: multer.memoryStorage() });
-
+// Middleware
 app.use(express.static('public'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// ========== FUNCIONES AUXILIARES ==========
-
-// Convierte rangos tipo "1-3, 5" a un array de índices [0, 1, 2, 4]
-function parsePageRanges(rangesStr, totalPages) {
-    if (!rangesStr || rangesStr.trim() === '') return [];
-    const parts = rangesStr.split(',').map(s => s.trim());
-    const pageIndices = new Set();
-    
-    for (const part of parts) {
-        if (part.includes('-')) {
-            const [start, end] = part.split('-').map(Number);
-            if (isNaN(start) || isNaN(end)) continue;
-            const min = Math.max(1, start);
-            const max = Math.min(totalPages, end);
-            for (let i = min; i <= max; i++) pageIndices.add(i - 1);
-        } else {
-            const num = Number(part);
-            if (!isNaN(num) && num >= 1 && num <= totalPages) pageIndices.add(num - 1);
-        }
-    }
-    return Array.from(pageIndices).sort((a, b) => a - b);
-}
-
-// Crea un nuevo PDF basándose en el PDF original y un arreglo de índices
-async function createPdfFromIndices(sourcePdf, indices) {
-    const newPdf = await PDFDocument.create();
-    const pages = await newPdf.copyPages(sourcePdf, indices);
-    pages.forEach(p => newPdf.addPage(p));
-    return await newPdf.save();
-}
-
-// ========== RUTA: UNIR ==========
-app.post('/merge', upload.array('pdfs'), async (req, res) => {
+// ============================================================
+// 1. UNIR PDFS (/merge)
+// ============================================================
+app.post('/merge', upload.array('files'), async (req, res) => {
     try {
-        const files = req.files;
-        if (!files || files.length === 0) return res.status(400).send('No se subió ningún archivo PDF');
-        
-        const mergedPdf = await PDFDocument.create();
-        for (const file of files) {
-            const pdf = await PDFDocument.load(file.buffer);
-            const indices = pdf.getPageIndices();
-            const copiedPages = await mergedPdf.copyPages(pdf, indices);
-            copiedPages.forEach(page => mergedPdf.addPage(page));
+        if (!req.files || req.files.length < 2) {
+            return res.status(400).send('Debes subir al menos 2 archivos PDF para unirlos.');
         }
-        
+
+        const mergedPdf = await PDFDocument.create();
+
+        for (const file of req.files) {
+            const pdfToMerge = await PDFDocument.load(file.buffer);
+            const copiedPages = await mergedPdf.copyPages(pdfToMerge, pdfToMerge.getPageIndices());
+            copiedPages.forEach((page) => mergedPdf.addPage(page));
+        }
+
         const pdfBytes = await mergedPdf.save();
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'attachment; filename=merged.pdf');
+        res.setHeader('Content-Disposition', 'attachment; filename="unido.pdf"');
         res.send(Buffer.from(pdfBytes));
     } catch (error) {
-        console.error(error);
-        res.status(500).send('Error al fusionar PDFs');
+        console.error('Error al unir PDFs:', error);
+        res.status(500).send(`Error al unir PDFs: ${error.message}`);
     }
 });
 
-// ========== RUTA: DIVIDIR ==========
+// ============================================================
+// 2. DIVIDIR PDF (/split)
+// ============================================================
 app.post('/split', upload.single('file'), async (req, res) => {
     try {
-        const file = req.file;
-        if (!file) return res.status(400).send('No se subió ningún archivo');
-        
-        const { mode, ranges: rangesStr } = req.body;
-        const pdf = await PDFDocument.load(file.buffer);
-        
-        if (mode === 'individual') {
-            return res.status(501).send('Dividir en páginas individuales requiere generar un ZIP. Pendiente de implementar.');
-        } 
-        
-        const pageIndices = parsePageRanges(rangesStr || '', pdf.getPageCount());
-        if (pageIndices.length === 0) return res.status(400).send('No se especificaron rangos válidos');
-        
-        const pdfBytes = await createPdfFromIndices(pdf, pageIndices);
+        if (!req.file) return res.status(400).send('No se subió ningún archivo PDF.');
+
+        const { mode, ranges } = req.body;
+        const srcPdf = await PDFDocument.load(req.file.buffer);
+        const totalPages = srcPdf.getPageCount();
+
+        const newPdf = await PDFDocument.create();
+        let pagesToKeep = [];
+
+        if (mode === 'ranges' && ranges) {
+            const parts = ranges.split(',');
+            parts.forEach(part => {
+                part = part.trim();
+                if (part.includes('-')) {
+                    const [start, end] = part.split('-').map(Number);
+                    for (let i = start; i <= end; i++) {
+                        if (i >= 1 && i <= totalPages) pagesToKeep.push(i - 1);
+                    }
+                } else {
+                    const pageNum = Number(part);
+                    if (pageNum >= 1 && pageNum <= totalPages) pagesToKeep.push(pageNum - 1);
+                }
+            });
+        } else {
+            for (let i = 0; i < totalPages; i++) pagesToKeep.push(i);
+        }
+
+        const copiedPages = await newPdf.copyPages(srcPdf, pagesToKeep);
+        copiedPages.forEach(page => newPdf.addPage(page));
+
+        const pdfBytes = await newPdf.save();
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'attachment; filename=split.pdf');
+        res.setHeader('Content-Disposition', 'attachment; filename="dividido.pdf"');
         res.send(Buffer.from(pdfBytes));
-        
     } catch (error) {
-        console.error(error);
-        res.status(500).send('Error al dividir PDF');
+        console.error('Error al dividir PDF:', error);
+        res.status(500).send(`Error al dividir PDF: ${error.message}`);
     }
 });
 
-// ========== RUTA: ELIMINAR PÁGINAS ==========
+// ============================================================
+// 3. ELIMINAR PÁGINAS (/delete-pages)
+// ============================================================
 app.post('/delete-pages', upload.single('file'), async (req, res) => {
     try {
-        const file = req.file;
-        if (!file) return res.status(400).send('No se subió ningún archivo');
-        
-        const pdf = await PDFDocument.load(file.buffer);
-        const totalPages = pdf.getPageCount();
-        const indicesToDelete = parsePageRanges(req.body.pagesToDelete || '', totalPages);
-        
-        if (indicesToDelete.length === 0) return res.status(400).send('No se especificaron páginas a eliminar');
-        
-        const allIndices = Array.from({ length: totalPages }, (_, i) => i);
-        const remainingIndices = allIndices.filter(i => !indicesToDelete.includes(i));
-        
-        if (remainingIndices.length === 0) return res.status(400).send('No quedan páginas después de eliminar');
-        
-        const pdfBytes = await createPdfFromIndices(pdf, remainingIndices);
+        if (!req.file) return res.status(400).send('No se subió ningún archivo PDF.');
+
+        const pagesToDeleteStr = req.body.pages || '';
+        const srcPdf = await PDFDocument.load(req.file.buffer);
+        const totalPages = srcPdf.getPageCount();
+
+        const pagesToDelete = new Set();
+        const parts = pagesToDeleteStr.split(',');
+        parts.forEach(part => {
+            part = part.trim();
+            if (part.includes('-')) {
+                const [start, end] = part.split('-').map(Number);
+                for (let i = start; i <= end; i++) pagesToDelete.add(i - 1);
+            } else if (part) {
+                pagesToDelete.add(Number(part) - 1);
+            }
+        });
+
+        const newPdf = await PDFDocument.create();
+        const pagesToKeep = [];
+        for (let i = 0; i < totalPages; i++) {
+            if (!pagesToDelete.has(i)) pagesToKeep.push(i);
+        }
+
+        if (pagesToKeep.length === 0) {
+            return res.status(400).send('No se pueden eliminar todas las páginas del PDF.');
+        }
+
+        const copiedPages = await newPdf.copyPages(srcPdf, pagesToKeep);
+        copiedPages.forEach(page => newPdf.addPage(page));
+
+        const pdfBytes = await newPdf.save();
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'attachment; filename=modified.pdf');
+        res.setHeader('Content-Disposition', 'attachment; filename="modificado.pdf"');
         res.send(Buffer.from(pdfBytes));
-        
     } catch (error) {
-        console.error(error);
-        res.status(500).send('Error al eliminar páginas');
+        console.error('Error al eliminar páginas:', error);
+        res.status(500).send(`Error al eliminar páginas: ${error.message}`);
     }
 });
 
-// ========== RUTA: EXTRAER PÁGINAS ==========
+// ============================================================
+// 4. EXTRAER PÁGINAS (/extract-pages)
+// ============================================================
 app.post('/extract-pages', upload.single('file'), async (req, res) => {
     try {
-        const file = req.file;
-        if (!file) return res.status(400).send('No se subió ningún archivo');
-        
-        const pdf = await PDFDocument.load(file.buffer);
-        const indicesToExtract = parsePageRanges(req.body.pagesToExtract || '', pdf.getPageCount());
-        
-        if (indicesToExtract.length === 0) return res.status(400).send('No se especificaron páginas a extraer');
-        
-        const pdfBytes = await createPdfFromIndices(pdf, indicesToExtract);
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'attachment; filename=extracted.pdf');
-        res.send(Buffer.from(pdfBytes));
-        
-    } catch (error) {
-        console.error(error);
-        res.status(500).send('Error al extraer páginas');
-    }
-});
+        if (!req.file) return res.status(400).send('No se subió ningún archivo PDF.');
 
-// ========== RUTA: REORDENAR PÁGINAS ==========
-app.post('/reorder-pages', upload.single('file'), async (req, res) => {
-    try {
-        const file = req.file;
-        if (!file) return res.status(400).send('No se subió ningún archivo');
-        
-        const newOrderStr = req.body.newOrder;
-        if (!newOrderStr) return res.status(400).send('No se especificó el nuevo orden');
-        
-        const newOrder = JSON.parse(newOrderStr);
-        if (!Array.isArray(newOrder) || newOrder.length === 0) return res.status(400).send('Formato de orden inválido');
-        
-        const pdf = await PDFDocument.load(file.buffer);
-        const totalPages = pdf.getPageCount();
-        const indices = newOrder.map(n => n - 1).filter(i => i >= 0 && i < totalPages);
-        
-        if (indices.length !== newOrder.length) return res.status(400).send('Algunos números de página están fuera de rango');
-        if (new Set(indices).size !== indices.length) return res.status(400).send('No se permiten páginas duplicadas');
-        
-        const pdfBytes = await createPdfFromIndices(pdf, indices);
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'attachment; filename=reordered.pdf');
-        res.send(Buffer.from(pdfBytes));
-        
-    } catch (error) {
-        console.error(error);
-        res.status(500).send('Error al reordenar páginas');
-    }
-});
+        const pagesToExtractStr = req.body.pages || '';
+        const srcPdf = await PDFDocument.load(req.file.buffer);
+        const totalPages = srcPdf.getPageCount();
 
-// ========== RUTA: COMPRIMIR PDF ==========
-app.post('/compress', async (req, res) => {
-    try {
-        const { images, level } = req.body;
-        if (!images || !Array.isArray(images) || images.length === 0) {
-            return res.status(400).send('No se recibieron páginas para comprimir');
+        const pagesToExtract = [];
+        const parts = pagesToExtractStr.split(',');
+        parts.forEach(part => {
+            part = part.trim();
+            if (part.includes('-')) {
+                const [start, end] = part.split('-').map(Number);
+                for (let i = start; i <= end; i++) {
+                    if (i >= 1 && i <= totalPages) pagesToExtract.push(i - 1);
+                }
+            } else if (part) {
+                const num = Number(part);
+                if (num >= 1 && num <= totalPages) pagesToExtract.push(num - 1);
+            }
+        });
+
+        if (pagesToExtract.length === 0) {
+            return res.status(400).send('Debes especificar al menos una página válida.');
         }
 
         const newPdf = await PDFDocument.create();
+        const copiedPages = await newPdf.copyPages(srcPdf, pagesToExtract);
+        copiedPages.forEach(page => newPdf.addPage(page));
 
-        for (const imgDataUrl of images) {
-            const base64Data = imgDataUrl.replace(/^data:image\/jpeg;base64,/, "");
-            const imageBuffer = Buffer.from(base64Data, 'base64');
-            const embeddedImage = await newPdf.embedJpg(imageBuffer);
-
-            const page = newPdf.addPage([embeddedImage.width, embeddedImage.height]);
-            page.drawImage(embeddedImage, {
-                x: 0, y: 0,
-                width: embeddedImage.width,
-                height: embeddedImage.height,
-            });
-        }
-
-        const pdfBytes = await newPdf.save({ useObjectStreams: true });
-
+        const pdfBytes = await newPdf.save();
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=compressed_${level || 'pdf'}.pdf`);
+        res.setHeader('Content-Disposition', 'attachment; filename="extraido.pdf"');
         res.send(Buffer.from(pdfBytes));
-
     } catch (error) {
-        console.error('Error al comprimir:', error);
-        res.status(500).send('Error al generar el PDF comprimido');
+        console.error('Error al extraer páginas:', error);
+        res.status(500).send(`Error al extraer páginas: ${error.message}`);
     }
 });
 
-// ========== RUTA: CONVERTIR A PDF ==========
+// ============================================================
+// 5. REORDENAR PÁGINAS (/reorder-pages)
+// ============================================================
+app.post('/reorder-pages', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).send('No se subió ningún archivo PDF.');
+
+        const orderStr = req.body.order || '';
+        const newOrder = orderStr.split(',').map(n => Number(n.trim()) - 1);
+
+        const srcPdf = await PDFDocument.load(req.file.buffer);
+        const newPdf = await PDFDocument.create();
+
+        const copiedPages = await newPdf.copyPages(srcPdf, newOrder);
+        copiedPages.forEach(page => newPdf.addPage(page));
+
+        const pdfBytes = await newPdf.save();
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'attachment; filename="reordenado.pdf"');
+        res.send(Buffer.from(pdfBytes));
+    } catch (error) {
+        console.error('Error al reordenar páginas:', error);
+        res.status(500).send(`Error al reordenar páginas: ${error.message}`);
+    }
+});
+
+// ============================================================
+// 6. COMPRIMIR PDF (/compress)
+// ============================================================
+app.post('/compress', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).send('No se subió ningún archivo PDF.');
+
+        const srcPdf = await PDFDocument.load(req.file.buffer, { ignoreEncryption: true });
+        const pdfBytes = await srcPdf.save({ useObjectStreams: true });
+
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'attachment; filename="comprimido.pdf"');
+        res.send(Buffer.from(pdfBytes));
+    } catch (error) {
+        console.error('Error al comprimir PDF:', error);
+        res.status(500).send(`Error al comprimir PDF: ${error.message}`);
+    }
+});
+
+// ============================================================
+// 7. CONVERTIR A PDF (/convert-to-pdf)
+// ============================================================
 app.post('/convert-to-pdf', upload.single('file'), async (req, res) => {
     try {
         const file = req.file;
-        if (!file) return res.status(400).send('No se subió ningún archivo');
+        if (!file || !file.buffer) {
+            return res.status(400).send('No se recibió ningún archivo o el buffer está vacío.');
+        }
 
         const ext = path.extname(file.originalname).toLowerCase();
+        const baseName = path.parse(file.originalname).name;
 
-        // 1. Convertir imágenes (JPG / PNG)
+        // --- A. Imágenes (JPG / PNG) ---
         if (['.jpg', '.jpeg', '.png'].includes(ext)) {
             const pdfDoc = await PDFDocument.create();
-            const image = (ext === '.png') 
-                ? await pdfDoc.embedPng(file.buffer) 
-                : await pdfDoc.embedJpg(file.buffer);
+            let image;
+
+            if (ext === '.png') {
+                image = await pdfDoc.embedPng(file.buffer);
+            } else {
+                image = await pdfDoc.embedJpg(file.buffer);
+            }
 
             const page = pdfDoc.addPage([image.width, image.height]);
             page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
 
             const pdfBytes = await pdfDoc.save();
             res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', 'attachment; filename=converted.pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="${baseName}.pdf"`);
             return res.send(Buffer.from(pdfBytes));
         }
 
-        // 2. Convertir documentos Office (Word, PowerPoint, Excel)
+        // --- B. Documentos Office (Word, PowerPoint, Excel) ---
         const officeExtensions = ['.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx'];
         if (officeExtensions.includes(ext)) {
             const pdfBuffer = await libreConvert(file.buffer, '.pdf', undefined);
             res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', 'attachment; filename=converted.pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="${baseName}.pdf"`);
             return res.send(Buffer.from(pdfBuffer));
         }
 
-        return res.status(400).send('Formato de archivo no compatible');
+        return res.status(400).send('Formato de archivo no soportado.');
 
     } catch (error) {
-        console.error('Error en conversión:', error);
-        res.status(500).send('Error al convertir el archivo a PDF');
+        console.error('Error detallado en conversión:', error);
+        res.status(500).send(`Error en servidor: ${error.message}`);
     }
 });
 
-// ========== INICIO DEL SERVIDOR ==========
+// Iniciar Servidor
 app.listen(PORT, () => {
-    console.log(`Servidor corriendo en http://localhost:${PORT}`);
+    console.log(`Servidor activo escuchando en el puerto ${PORT}`);
 });

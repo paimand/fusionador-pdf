@@ -210,6 +210,47 @@ app.post('/compress', async (req, res) => {
     }
 });
 
+// ========== RUTA: CONVERTIR A PDF ==========
+app.post('/convert-to-pdf', upload.single('file'), async (req, res) => {
+    try {
+        const file = req.file;
+        if (!file) return res.status(400).send('No se subió ningún archivo');
+
+        const ext = path.extname(file.originalname).toLowerCase();
+
+        // 1. Convertir imágenes (JPG / PNG)
+        if (['.jpg', '.jpeg', '.png'].includes(ext)) {
+            const pdfDoc = await PDFDocument.create();
+            const image = (ext === '.png') 
+                ? await pdfDoc.embedPng(file.buffer) 
+                : await pdfDoc.embedJpg(file.buffer);
+
+            const page = pdfDoc.addPage([image.width, image.height]);
+            page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
+
+            const pdfBytes = await pdfDoc.save();
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', 'attachment; filename=converted.pdf');
+            return res.send(Buffer.from(pdfBytes));
+        }
+
+        // 2. Convertir documentos Office (Word, PowerPoint, Excel)
+        const officeExtensions = ['.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx'];
+        if (officeExtensions.includes(ext)) {
+            const pdfBuffer = await libreConvert(file.buffer, '.pdf', undefined);
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', 'attachment; filename=converted.pdf');
+            return res.send(Buffer.from(pdfBuffer));
+        }
+
+        return res.status(400).send('Formato de archivo no compatible');
+
+    } catch (error) {
+        console.error('Error en conversión:', error);
+        res.status(500).send('Error al convertir el archivo a PDF');
+    }
+});
+
 // ========== INICIO DEL SERVIDOR ==========
 app.listen(PORT, () => {
     console.log(`Servidor corriendo en http://localhost:${PORT}`);

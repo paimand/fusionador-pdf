@@ -4,6 +4,8 @@ const path = require('path');
 const util = require('util');
 const { PDFDocument } = require('pdf-lib');
 const libre = require('libreoffice-convert');
+const Jimp = require('jimp');
+
 const libreConvert = util.promisify(libre.convert);
 
 const app = express();
@@ -16,7 +18,7 @@ const upload = multer({
     limits: { fileSize: 50 * 1024 * 1024 } // Límite de 50 MB
 });
 
-// Middleware
+// Middlewares
 app.use(express.static('public'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -229,7 +231,7 @@ app.post('/compress', upload.single('file'), async (req, res) => {
 });
 
 // ============================================================
-// 7. CONVERTIR A PDF (/convert-to-pdf) - OPTIMIZADO
+// 7. CONVERTIR A PDF (/convert-to-pdf) - CON JIMP (JS PURO)
 // ============================================================
 app.post('/convert-to-pdf', upload.single('file'), async (req, res) => {
     try {
@@ -241,29 +243,19 @@ app.post('/convert-to-pdf', upload.single('file'), async (req, res) => {
         const ext = path.extname(file.originalname).toLowerCase();
         const baseName = path.parse(file.originalname).name;
 
-        // --- A. IMÁGENES (JPG, JPEG, PNG, WEBP, BMP) ---
-        const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif'];
+        // --- A. IMÁGENES (JPG, PNG, WEBP, BMP, TIFF) ---
+        const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff'];
         if (imageExtensions.includes(ext)) {
+            // 1. Jimp procesa la imagen en JS puro y genera un buffer PNG estandarizado
+            const image = await Jimp.read(file.buffer);
+            const pngBuffer = await image.getBufferAsync(Jimp.MIME_PNG);
+
+            // 2. pdf-lib incrusta el PNG procesado
             const pdfDoc = await PDFDocument.create();
-            let image;
+            const embeddedImage = await pdfDoc.embedPng(pngBuffer);
 
-            // 1. Intentar incrustar JPG/PNG directamente (Ultrarrápido, < 1 segundo)
-            try {
-                if (ext === '.png') {
-                    image = await pdfDoc.embedPng(file.buffer);
-                } else if (ext === '.jpg' || ext === '.jpeg') {
-                    image = await pdfDoc.embedJpg(file.buffer);
-                } else {
-                    throw new Error('Formato requiere conversión previa');
-                }
-            } catch (errDirect) {
-                // 2. Si falla (JPG CMYK/Progresivo o WEBP), procesar con sharp
-                const pngBuffer = await sharp(file.buffer).png().toBuffer();
-                image = await pdfDoc.embedPng(pngBuffer);
-            }
-
-            const page = pdfDoc.addPage([image.width, image.height]);
-            page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
+            const page = pdfDoc.addPage([embeddedImage.width, embeddedImage.height]);
+            page.drawImage(embeddedImage, { x: 0, y: 0, width: embeddedImage.width, height: embeddedImage.height });
 
             const pdfBytes = await pdfDoc.save();
             res.setHeader('Content-Type', 'application/pdf');

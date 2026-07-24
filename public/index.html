@@ -8,16 +8,63 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    
+    <!-- Mejoras de responsividad y diseño para la barra de pestañas y cajones -->
+    <style>
+        /* Pestañas 100% reponsivas en una sola línea */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            white-space: nowrap;
+            padding-bottom: 8px;
+            margin-bottom: 20px;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none; /* Ocultar scrollbar en Firefox */
+        }
+        .tabs::-webkit-scrollbar {
+            display: none; /* Ocultar scrollbar en Chrome/Safari */
+        }
+        .tab {
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+
+        /* Estilo garantizado para el cajón de subida/arrastrar */
+        .upload-area {
+            border: 2px dashed #3b82f6;
+            background-color: #f8fafc;
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            margin-bottom: 20px;
+        }
+        .upload-area:hover, .upload-area.dragover {
+            background-color: #eff6ff;
+            border-color: #2563eb;
+        }
+        .upload-area p {
+            margin: 0;
+            font-weight: 500;
+            color: #475569;
+            pointer-events: none;
+        }
+        .upload-area input[type="file"] {
+            display: none;
+        }
+    </style>
 </head>
 <body>
 
     <div class="container">
         <header class="tool-header">
             <img src="https://i.ibb.co/RTgVzm5q/Suite-PDF-removebg-preview.png" alt="Suite PDF">
-            <p>Une, separa, elimina, extrae, ordena y convierte PDF online de forma completamente gratuita. No se necesita instalación. Elige una operación y sube tus archivos.</p>
+            <p>Une, separa, elimina, extrae, ordena, comprime y convierte PDF online de forma completamente gratuita. Sin instalación.</p>
         </header>
 
-        <!-- Tabs -->
+        <!-- Tabs deslizable horizontalmente -->
         <div class="tabs">
             <button class="tab active" data-tab="merge">Unir</button>
             <button class="tab" data-tab="split">Dividir</button>
@@ -49,7 +96,7 @@
             </div>
 
             <!-- ==================== SPLIT ==================== -->
-            <div id="splitPanel" class="panel">
+            <div id="splitPanel" class="panel" style="display: none;">
                 <div class="upload-area" id="dropZoneSplit">
                     <p>Arrastra o selecciona un PDF para dividir</p>
                     <input type="file" id="fileInputSplit" accept=".pdf">
@@ -64,7 +111,6 @@
                     </label>
                 </div>
 
-                <!-- Vista previa de páginas -->
                 <div id="splitPreview" style="display:none; margin-bottom:16px;">
                     <div class="grid-controls">
                         <button id="splitSelectAll" class="btn btn-secondary" style="padding:6px 14px;">Seleccionar todas</button>
@@ -85,7 +131,7 @@
             </div>
 
             <!-- ==================== DELETE ==================== -->
-            <div id="deletePanel" class="panel">
+            <div id="deletePanel" class="panel" style="display: none;">
                 <div class="upload-area" id="dropZoneDelete">
                     <p>Arrastra o selecciona un PDF para eliminar páginas</p>
                     <input type="file" id="fileInputDelete" accept=".pdf">
@@ -111,7 +157,7 @@
             </div>
 
             <!-- ==================== EXTRACT ==================== -->
-            <div id="extractPanel" class="panel">
+            <div id="extractPanel" class="panel" style="display: none;">
                 <div class="upload-area" id="dropZoneExtract">
                     <p>Arrastra o selecciona un PDF para extraer páginas</p>
                     <input type="file" id="fileInputExtract" accept=".pdf">
@@ -137,7 +183,7 @@
             </div>
 
             <!-- ==================== REORDER ==================== -->
-            <div id="reorderPanel" class="panel">
+            <div id="reorderPanel" class="panel" style="display: none;">
                 <div class="upload-area" id="dropZoneReorder">
                     <p>Arrastra o selecciona un PDF para ordenar sus páginas</p>
                     <input type="file" id="fileInputReorder" accept=".pdf">
@@ -153,7 +199,7 @@
             </div>
 
             <!-- ==================== COMPRESS ==================== -->
-            <div id="compressPanel" class="panel">
+            <div id="compressPanel" class="panel" style="display: none;">
                 <div class="upload-area" id="dropZoneCompress">
                     <p>Arrastra o selecciona un PDF para comprimir</p>
                     <input type="file" id="fileInputCompress" accept=".pdf">
@@ -179,9 +225,9 @@
             </div>
 
             <!-- ==================== CONVERT ==================== -->
-            <div id="convertPanel" class="panel">
+            <div id="convertPanel" class="panel" style="display: none;">
                 <div class="upload-area" id="dropZoneConvert">
-                    <p>Arrastra o selecciona un archivo para convertir a PDF (Office o Imágenes)</p>
+                    <p id="convertText">📁 Arrastra o haz clic aquí para seleccionar tu archivo (Word, Excel, PPT o Imágenes)</p>
                     <input type="file" id="fileInputConvert" accept=".jpg,.jpeg,.png,.doc,.docx,.ppt,.pptx,.xls,.xlsx">
                 </div>
 
@@ -193,7 +239,7 @@
 
         </div>
 
-        <div id="loading">⏳ Procesando... Por favor espera.</div>
+        <div id="loading" style="display:none; text-align:center; margin-top:20px; font-weight:bold;">⏳ Procesando... Por favor espera.</div>
     </div>
 
     <script src="script.js"></script>

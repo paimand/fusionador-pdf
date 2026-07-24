@@ -229,27 +229,37 @@ app.post('/compress', upload.single('file'), async (req, res) => {
 });
 
 // ============================================================
-// 7. CONVERTIR A PDF (/convert-to-pdf)
+// 7. CONVERTIR A PDF (/convert-to-pdf) - OPTIMIZADO
 // ============================================================
 app.post('/convert-to-pdf', upload.single('file'), async (req, res) => {
     try {
         const file = req.file;
         if (!file || !file.buffer) {
-            return res.status(400).send('No se recibió ningún archivo o el buffer está vacío.');
+            return res.status(400).send('No se recibió ningún archivo o el búfer está vacío.');
         }
 
         const ext = path.extname(file.originalname).toLowerCase();
         const baseName = path.parse(file.originalname).name;
 
-        // --- A. Imágenes (JPG / PNG) ---
-        if (['.jpg', '.jpeg', '.png'].includes(ext)) {
+        // --- A. IMÁGENES (JPG, JPEG, PNG, WEBP, BMP) ---
+        const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif'];
+        if (imageExtensions.includes(ext)) {
             const pdfDoc = await PDFDocument.create();
             let image;
 
-            if (ext === '.png') {
-                image = await pdfDoc.embedPng(file.buffer);
-            } else {
-                image = await pdfDoc.embedJpg(file.buffer);
+            // 1. Intentar incrustar JPG/PNG directamente (Ultrarrápido, < 1 segundo)
+            try {
+                if (ext === '.png') {
+                    image = await pdfDoc.embedPng(file.buffer);
+                } else if (ext === '.jpg' || ext === '.jpeg') {
+                    image = await pdfDoc.embedJpg(file.buffer);
+                } else {
+                    throw new Error('Formato requiere conversión previa');
+                }
+            } catch (errDirect) {
+                // 2. Si falla (JPG CMYK/Progresivo o WEBP), procesar con sharp
+                const pngBuffer = await sharp(file.buffer).png().toBuffer();
+                image = await pdfDoc.embedPng(pngBuffer);
             }
 
             const page = pdfDoc.addPage([image.width, image.height]);
@@ -261,7 +271,7 @@ app.post('/convert-to-pdf', upload.single('file'), async (req, res) => {
             return res.send(Buffer.from(pdfBytes));
         }
 
-        // --- B. Documentos Office (Word, PowerPoint, Excel) ---
+        // --- B. DOCUMENTOS OFFICE (WORD, POWERPOINT, EXCEL) ---
         const officeExtensions = ['.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx'];
         if (officeExtensions.includes(ext)) {
             const pdfBuffer = await libreConvert(file.buffer, '.pdf', undefined);
